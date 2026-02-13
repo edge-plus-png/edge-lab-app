@@ -1,0 +1,7 @@
+{
+  "slug": "nuco",
+  "displayName": "Nuco",
+  "currency": "GBP",
+  "threeDS": true,
+  "allowedReturnUrls": ["https://localhost:3000"]
+}

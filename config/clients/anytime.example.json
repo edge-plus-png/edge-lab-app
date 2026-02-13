@@ -1,0 +1,7 @@
+{
+  "slug": "anytime",
+  "displayName": "Anytime Booking",
+  "currency": "GBP",
+  "threeDS": true,
+  "allowedReturnUrls": ["https://localhost:3000"]
+}
