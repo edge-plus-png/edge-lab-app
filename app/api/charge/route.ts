@@ -4,6 +4,10 @@ import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
 import { getSession, saveResult } from "@/lib/store";
 
+function newId() {
+  return crypto.randomUUID().replace(/-/g, "");
+}
+
 export async function POST(req: NextRequest) {
   const host = req.headers.get("host") || "";
   const slug = getSlugFromHost(host);
@@ -11,39 +15,46 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const sessionId = String(body.sessionId || "");
-  const paymentToken = String(body.paymentToken || ""); // token/nonce from component
+  const paymentToken = String(body.paymentToken || "");
 
   if (!sessionId || !paymentToken) {
-    return NextResponse.json({ error: "Missing sessionId/paymentToken" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing sessionId/paymentToken" },
+      { status: 400 }
+    );
   }
 
   const session = getSession(sessionId);
   if (!session || session.slug !== slug) {
-    return NextResponse.json({ error: "Unknown sessionId" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Unknown sessionId" },
+      { status: 404 }
+    );
   }
 
-  // Get private key from ENV (server-side only)
+  // Load private key from ENV
   const privateKeyEnv = cfg.privateKeyEnv || "";
   const privateKey = privateKeyEnv ? process.env[privateKeyEnv] : "";
+
   if (!privateKey) {
-    return NextResponse.json({ error: `Missing private key ENV: ${privateKeyEnv}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Missing private key ENV: ${privateKeyEnv}` },
+      { status: 500 }
+    );
   }
 
-  /**
-   * NMI charge step:
-   * This is the step that creates the transaction in the gateway.
-   *
-   * NOTE: The exact field name for the token depends on how your component returns it.
-   * We'll wire that once you paste the component callback payload.
-   */
+  // ------------------------------------
+  // Create NMI Sale Transaction
+  // ------------------------------------
+
   const form = new URLSearchParams();
   form.set("security_key", privateKey);
   form.set("type", "sale");
-  form.set("amount", String(session.amount.toFixed(2)));
+  form.set("amount", session.amount.toFixed(2));
   form.set("currency", session.currency);
   form.set("orderid", session.orderRef);
 
-  // Common token field used in NMI token flows:
+  // Token from Payment Component
   form.set("payment_token", paymentToken);
 
   // Optional customer data
@@ -52,15 +63,18 @@ export async function POST(req: NextRequest) {
   form.set("email", session.customer.email);
   form.set("zip", session.customer.postalCode);
 
-  const resp = await fetch("https://secure.networkmerchants.com/api/transact.php", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
-  });
+  const resp = await fetch(
+    "https://secure.networkmerchants.com/api/transact.php",
+    {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    }
+  );
 
   const text = await resp.text();
 
-  // NMI returns a querystring-style response by default
+  // NMI returns querystring-style response
   const parsed = Object.fromEntries(new URLSearchParams(text));
 
   const approved = parsed.response === "1";
@@ -68,7 +82,12 @@ export async function POST(req: NextRequest) {
 
   const status = approved ? "approved" : declined ? "declined" : "error";
 
+  // ------------------------------------
+  // Save Result (NOW WITH resultId)
+  // ------------------------------------
+
   const result = saveResult({
+    resultId: newId(), // ✅ REQUIRED
     sessionId: session.sessionId,
     slug,
     status,
@@ -76,9 +95,9 @@ export async function POST(req: NextRequest) {
     amount: session.amount,
     currency: session.currency,
     gateway: {
-      transactionId: parsed.transactionid,
-      message: parsed.responsetext,
-      responseCode: parsed.response_code,
+      transactionId: parsed.transactionid || "",
+      message: parsed.responsetext || "",
+      responseCode: parsed.response_code || "",
       authCode: parsed.authcode,
       avs: parsed.avsresponse,
       cvv: parsed.cvvresponse,
@@ -89,5 +108,9 @@ export async function POST(req: NextRequest) {
     raw: parsed,
   });
 
-  return NextResponse.json({ ok: true, status, resultId: result.resultId });
+  return NextResponse.json({
+    ok: true,
+    status,
+    resultId: result.resultId,
+  });
 }
