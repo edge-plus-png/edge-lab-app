@@ -4,55 +4,25 @@ import { loadClientConfig } from "@/lib/clients";
 import { createSession, getSession } from "@/lib/store";
 import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 
-/**
- * Extract API key from request headers.
- * Accepts:
- *  - Authorization: Bearer <key>
- *  - x-api-key: <key>
- */
-function getApiKeyFromRequest(req: NextRequest) {
-  const auth = req.headers.get("authorization") || "";
-  if (auth.toLowerCase().startsWith("bearer ")) {
-    return auth.slice(7).trim();
-  }
-
-  const xKey = req.headers.get("x-api-key") || "";
-  if (xKey) return xKey.trim();
-
-  return "";
-}
-
-/**
- * Allow localhost anonymous usage in dev only.
- */
-function isLocalDev(host: string) {
-  return (
-    process.env.NODE_ENV !== "production" &&
-    (host.includes("localhost") || host.includes("127.0.0.1"))
-  );
-}
-
-/**
- * GET /api/session?sessionId=xxx
- * Used by hosted pay page to retrieve session details.
- */
 export async function GET(req: NextRequest) {
   const host = req.headers.get("host") || "";
   const slug = getSlugFromHost(host);
   const cfg = loadClientConfig(slug);
 
   const sessionId = req.nextUrl.searchParams.get("sessionId") || "";
+
   if (!sessionId) {
     return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
   const session = getSession(sessionId);
+
   if (!session || session.slug !== slug) {
     return NextResponse.json({ error: "Unknown sessionId" }, { status: 404 });
   }
 
   return NextResponse.json({
-    sessionId: session.sessionId,
+    sessionId: session.sessionId ?? sessionId,
     amount: session.amount,
     currency: session.currency,
     orderRef: session.orderRef,
@@ -61,34 +31,10 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/**
- * POST /api/session
- * Partner creates a hosted payment session.
- */
 export async function POST(req: NextRequest) {
   const host = req.headers.get("host") || "";
   const slug = getSlugFromHost(host);
   const cfg = loadClientConfig(slug);
-
-  const providedKey = getApiKeyFromRequest(req);
-
-  // Production: always require API key
-  if (process.env.NODE_ENV === "production") {
-    if (!providedKey || providedKey !== cfg.apiKey) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-  } else {
-    // Dev mode:
-    // Allow localhost without key (for demo UI)
-    if (!providedKey && !isLocalDev(host)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // If key provided, validate it
-    if (providedKey && providedKey !== cfg.apiKey) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-  }
 
   const body = await req.json().catch(() => ({}));
 
@@ -148,17 +94,12 @@ export async function POST(req: NextRequest) {
       lastName: String(customer.lastName),
       email: String(customer.email),
       postalCode: String(customer.postalCode),
-      country: customer.country
-        ? String(customer.country).toUpperCase()
-        : undefined,
     },
     returnUrl,
   });
 
-  const payUrl = `https://${host}/pay/${session.sessionId}`;
+  const sessionId = session.sessionId;
+  const payUrl = `https://${host}/pay/${sessionId}`;
 
-  return NextResponse.json({
-    sessionId: session.sessionId,
-    payUrl,
-  });
+  return NextResponse.json({ sessionId, payUrl });
 }
