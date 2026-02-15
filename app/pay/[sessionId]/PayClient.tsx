@@ -1,214 +1,87 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  NmiPayments,
-  NmiThreeDSecure,
-  type NmiThreeDSecureRef,
-} from "@nmipayments/nmi-pay-react";
+import PayClient from "./PayClient";
 
 const LAB_RED = "#DC2626";
 
-type SessionInfo = {
-  sessionId: string;
-  amount: number;
-  currency: string;
-  orderRef: string;
-  tokenizationKey: string;
-};
-
-export default function PayClient({ sessionId }: { sessionId: string }) {
-  const router = useRouter();
-  const threeDSRef = useRef<NmiThreeDSecureRef>(null);
-
-  const [session, setSession] = useState<SessionInfo | null>(null);
-  const [paymentToken, setPaymentToken] = useState<string>("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/session?sessionId=${encodeURIComponent(sessionId)}`
-        );
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to load session");
-        setSession(data);
-      } catch (e: any) {
-        setError(e?.message || "Failed to load session");
-      }
-    })();
-  }, [sessionId]);
-
-  async function chargeWith3DS(result: any) {
-    if (!paymentToken) throw new Error("Missing paymentToken");
-
-    try {
-      const res = await fetch("/api/charge", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          paymentToken,
-          cardHolderAuth: result?.cardHolderAuth,
-          cavv: result?.cavv,
-          directoryServerId: result?.directoryServerId,
-          eci: result?.eci,
-          threeDsVersion: result?.threeDsVersion,
-          xid: result?.xid,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Payment failed");
-
-      router.push(`/result/${sessionId}`);
-    } catch (e: any) {
-      setError(e?.message || "Payment processing failed");
-      setBusy(false);
-    }
-  }
-
-  function start3DS() {
-    if (!session || !paymentToken) return;
-
-    setError(null);
-    setBusy(true);
-
-    threeDSRef.current?.startThreeDSecure({
-      paymentToken,
-      currency: session.currency,
-      amount: String(session.amount.toFixed(2)),
-      firstName: "John",
-      lastName: "Doe",
-    });
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: 12, background: "#fee", borderRadius: 10 }}>
-        <b>Error:</b> {error}
-      </div>
-    );
-  }
-
-  if (!session) return <p>Loading payment…</p>;
+export default async function PayPage({
+  params,
+}: {
+  params: Promise<{ sessionId: string }>;
+}) {
+  const { sessionId } = await params;
 
   return (
-    <div style={{ position: "relative" }}>
-      {/* Overlay while processing */}
-      {busy && (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#fafafa",
+        fontFamily: "system-ui",
+        padding: "34px 16px",
+      }}
+    >
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        {/* Header */}
         <div
           style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(255,255,255,0.85)",
             display: "flex",
-            flexDirection: "column",
             alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 16,
-            zIndex: 10,
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 18,
           }}
         >
-          <div className="spinner" />
-          <p style={{ marginTop: 12, fontWeight: 600 }}>
-            Processing secure payment…
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {/* Logo only (no repeated text) */}
+            <img
+              src="/edge-lab-logo.png"
+              alt="edge lab"
+              style={{ height: 52 }}
+            />
+
+            <div style={{ lineHeight: 1.2 }}>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>
+                Secure Payment Authentication
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.65 }}>
+                3DS is required before charging
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>
+            Session: <b>{sessionId}</b>
+          </div>
         </div>
-      )}
 
-      <div
-        style={{
-          opacity: busy ? 0.6 : 1,
-          pointerEvents: busy ? "none" : "auto",
-        }}
-      >
-        <p style={{ marginTop: 0 }}>
-          <b>Order:</b> {session.orderRef} —{" "}
-          <b>{session.currency}</b> {session.amount}
-        </p>
-
-        <NmiPayments
-          tokenizationKey={session.tokenizationKey}
-          layout="multiLine"
-          paymentMethods={["card"]}
-          onChange={(data: any) => {
-            if (data?.complete && data?.token)
-              setPaymentToken(data.token);
+        {/* Card container */}
+        <div
+          style={{
+            borderRadius: 18,
+            background: "#fff",
+            border: "1px solid #eee",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
+            overflow: "hidden",
           }}
-        />
+        >
+          {/* subtle brand accent */}
+          <div style={{ height: 5, background: LAB_RED }} />
 
-        <NmiThreeDSecure
-          ref={threeDSRef}
-          tokenizationKey={session.tokenizationKey}
-          modal={true}
-          onComplete={async (result: any) => {
-            await chargeWith3DS(result);
+          <div style={{ padding: 22 }}>
+            <PayClient sessionId={sessionId} />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            marginTop: 18,
+            textAlign: "center",
+            fontSize: 12,
+            opacity: 0.6,
           }}
-          onFailure={(e: any) => {
-            setBusy(false);
-            setError(e?.message || "3DS failed");
-          }}
-        />
-
-     <button
-  onClick={start3DS}
-  disabled={!paymentToken || busy}
-  onMouseEnter={(e) => {
-    if (!paymentToken || busy) return;
-    e.currentTarget.style.boxShadow =
-      "0 10px 28px rgba(220,38,38,0.35), 0 0 0 4px rgba(220,38,38,0.15)";
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.boxShadow = "none";
-  }}
-  style={{
-    marginTop: 16,
-    width: "100%",
-    padding: "14px",
-    borderRadius: 12,
-    border: "none",
-    background: LAB_RED,
-    color: "#fff",
-    fontWeight: 800,
-    fontSize: 16,
-    cursor: !paymentToken || busy ? "not-allowed" : "pointer",
-    opacity: !paymentToken || busy ? 0.6 : 1,
-    transition: "all 0.15s ease",
-  }}
->
-  {busy ? "Processing…" : "Authenticate (3DS) & Pay"}
-</button>
-
-<div style={{ marginTop: 10, fontSize: 12, opacity: 0.75, textAlign: "center" }}>
-  Secured by <span style={{ fontWeight: 700 }}>edge+</span>
-</div>
-
-        <p style={{ fontSize: 13, opacity: 0.65, marginTop: 12 }}>
-          3D Secure authentication is required before charging.
-        </p>
+        >
+          Powered by <span style={{ fontWeight: 700 }}>edge+</span>
+        </div>
       </div>
-
-      {/* Spinner CSS */}
-      <style jsx>{`
-        .spinner {
-          width: 36px;
-          height: 36px;
-          border: 4px solid #eee;
-          border-top: 4px solid ${LAB_RED};
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-      `}</style>
-    </div>
+    </main>
   );
 }
