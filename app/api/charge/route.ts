@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
 import { getSession, saveResult } from "@/lib/store";
+import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 
 function newId() {
   return crypto.randomUUID().replace(/-/g, "");
@@ -27,7 +28,10 @@ export async function POST(req: NextRequest) {
   const xid = body.xid ? String(body.xid) : "";
 
   if (!sessionId || !paymentToken) {
-    return NextResponse.json({ error: "Missing sessionId/paymentToken" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing sessionId/paymentToken" },
+      { status: 400 }
+    );
   }
 
   const session = getSession(sessionId);
@@ -39,10 +43,15 @@ export async function POST(req: NextRequest) {
   const privateKeyEnv = cfg.privateKeyEnv || "";
   const privateKey = privateKeyEnv ? process.env[privateKeyEnv] : "";
   if (!privateKey) {
-    return NextResponse.json({ error: `Missing private key ENV: ${privateKeyEnv}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Missing private key ENV: ${privateKeyEnv}` },
+      { status: 500 }
+    );
   }
 
+  // -----------------------------
   // Create NMI Sale Transaction
+  // -----------------------------
   const form = new URLSearchParams();
   form.set("security_key", privateKey);
   form.set("type", "sale");
@@ -61,14 +70,7 @@ export async function POST(req: NextRequest) {
   form.set("email", session.customer.email);
   form.set("zip", session.customer.postalCode);
 
-  /**
-   * IMPORTANT:
-   * These names are the bridge between “3DS auth result” and “gateway transaction”.
-   * Your 3DS component returns these fields.  [oai_citation:2‡Payment component 022026.docx](sediment://file_000000007de8720e8aadad2a462fc28c)
-   *
-   * Gateways vary on exact param names. If your gateway expects different ones,
-   * we’ll align them to what you see in NMI’s transaction API logs.
-   */
+  // Bridge 3DS -> Gateway (if present)
   if (eci) form.set("eci", eci);
   if (cavv) form.set("cavv", cavv);
   if (xid) form.set("xid", xid);
@@ -89,6 +91,9 @@ export async function POST(req: NextRequest) {
   const declined = parsed.response === "2";
   const status = approved ? "approved" : declined ? "declined" : "error";
 
+  // -----------------------------
+  // Save Result
+  // -----------------------------
   const result = saveResult({
     resultId: newId(),
     sessionId: session.sessionId,
@@ -105,10 +110,13 @@ export async function POST(req: NextRequest) {
       avs: parsed.avsresponse,
       cvv: parsed.cvvresponse,
 
-      // These should start showing once 3DS is actually being used
-      eci: parsed.eci || eci,
-      cavv: parsed.cavv || cavv,
-      threeDsVersion: parsed.threeds_version || parsed.three_ds_version || threeDsVersion,
+      // 3DS fields (prefer gateway echo, fallback to client-provided)
+      eci: (parsed.eci as string) || eci,
+      cavv: (parsed.cavv as string) || cavv,
+      threeDsVersion:
+        (parsed.threeds_version as string) ||
+        (parsed.three_ds_version as string) ||
+        threeDsVersion,
     },
     raw: {
       nmi: parsed,
@@ -116,5 +124,58 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ok: true, status, resultId: result.resultId });
+  // -----------------------------
+  // Auto POST to Return URL (if set)
+  // Do NOT fail the payment if webhook fails.
+  // -----------------------------
+  let webhook: { attempted: boolean; ok?: boolean; statusCode?: number; error?: string } = {
+    attempted: false,
+  };
+
+  const returnUrl = session.returnUrl || "";
+  if (returnUrl) {
+    webhook.attempted = true;
+
+    try {
+      validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
+
+      const payload = {
+        type: "edge_lab_result",
+        client: slug,
+
+        status: result.status,
+        resultId: result.resultId,
+        sessionId: result.sessionId,
+
+        // partner-friendly alias
+        reference: result.orderRef,
+
+        orderRef: result.orderRef,
+        amount: result.amount,
+        currency: result.currency,
+
+        gateway: result.gateway || {},
+        ts: new Date().toISOString(),
+      };
+
+      const r = await fetch(returnUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      webhook.ok = r.ok;
+      webhook.statusCode = r.status;
+    } catch (e: any) {
+      webhook.ok = false;
+      webhook.error = e?.message || "Failed to POST to returnUrl";
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    status,
+    resultId: result.resultId,
+    webhook,
+  });
 }

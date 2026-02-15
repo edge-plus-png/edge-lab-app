@@ -1,3 +1,4 @@
+// app/api/result-resend/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
@@ -45,6 +46,9 @@ export async function POST(req: NextRequest) {
     resultId: result.resultId,
     sessionId: result.sessionId,
 
+    // ✅ partner-friendly alias (artisio expects reference)
+    reference: result.orderRef,
+
     orderRef: result.orderRef,
     amount: result.amount,
     currency: result.currency,
@@ -62,6 +66,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: r.ok, statusCode: r.status });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message || "Failed to POST to returnUrl" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e.message || "Failed to POST to returnUrl" },
+      { status: 500 }
+    );
   }
 }

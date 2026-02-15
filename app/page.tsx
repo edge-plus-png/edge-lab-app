@@ -151,7 +151,7 @@ export default function HomePage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Put your logo in /public/edge-lab-logo.png */}
-          <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 34 }} />
+          <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 56 }} />
           <div>
             {/* Don’t repeat “edge lab” here — logo already covers it */}
             <div style={{ fontWeight: 800, letterSpacing: 0.2 }}>Payment & 3DS Testing Environment</div>

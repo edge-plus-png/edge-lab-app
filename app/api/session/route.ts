@@ -1,3 +1,4 @@
+// app/api/session/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
@@ -10,13 +11,11 @@ export async function GET(req: NextRequest) {
   const cfg = loadClientConfig(slug);
 
   const sessionId = req.nextUrl.searchParams.get("sessionId") || "";
-
   if (!sessionId) {
     return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
   }
 
   const session = getSession(sessionId);
-
   if (!session || session.slug !== slug) {
     return NextResponse.json({ error: "Unknown sessionId" }, { status: 404 });
   }
@@ -38,9 +37,10 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
 
+  // Accept partner naming too (artisio style)
   const amount = Number(body.amount);
-  const currency = String(body.currency || cfg.currency);
-  const orderRef = String(body.orderRef || "");
+  const currency = String(body.currency || body.currency_code || cfg.currency);
+  const orderRef = String(body.orderRef || body.reference || "");
   const customer = body.customer || {};
   const returnUrl = body.returnUrl ? String(body.returnUrl) : undefined;
 
@@ -58,15 +58,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (!orderRef) {
-    return NextResponse.json({ error: "Missing orderRef" }, { status: 400 });
+    return NextResponse.json({ error: "Missing orderRef/reference" }, { status: 400 });
   }
 
-  if (
-    !customer.firstName ||
-    !customer.lastName ||
-    !customer.email ||
-    !customer.postalCode
-  ) {
+  if (!customer.firstName || !customer.lastName || !customer.email || !customer.postalCode) {
     return NextResponse.json(
       { error: "Missing required customer fields" },
       { status: 400 }
