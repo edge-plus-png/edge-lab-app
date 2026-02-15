@@ -62,6 +62,22 @@ export default function HomePage() {
     background: "#fff",
   };
 
+  const howItWorksStyle: React.CSSProperties = {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 14,
+    border: "1px solid #f3f3f3",
+    background: "#fafafa",
+  };
+
+  const codeStyle: React.CSSProperties = {
+    background: "#111",
+    color: "#fff",
+    padding: "2px 6px",
+    borderRadius: 6,
+    fontSize: 12,
+  };
+
   useEffect(() => {
     const t = window.location.hostname.split(".")[0] || "";
     setTenant(t);
@@ -153,9 +169,10 @@ export default function HomePage() {
           {/* Put your logo in /public/edge-lab-logo.png */}
           <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 56 }} />
           <div>
-            {/* Don’t repeat “edge lab” here — logo already covers it */}
             <div style={{ fontWeight: 800, letterSpacing: 0.2 }}>Payment & 3DS Testing Environment</div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Create a session, complete 3DS, and optionally POST results to your Return URL.</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>
+              Create a session, complete 3DS, and automatically POST the result to your Return URL (if provided).
+            </div>
           </div>
 
           {isDemo && (
@@ -193,7 +210,7 @@ export default function HomePage() {
       )}
 
       <div style={cardStyle}>
-        {/* Quick actions (restored) */}
+        {/* Quick actions */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
           <button type="button" onClick={() => setAmount("10.00")} disabled={busy} style={busy ? { ...btnBase, ...btnDisabled } : btnBase}>
             Approve (10.00)
@@ -214,12 +231,38 @@ export default function HomePage() {
 
         <hr style={{ margin: "14px 0", border: 0, borderTop: "1px solid #eee" }} />
 
+        {/* How it works (simple + developer-friendly) */}
+        <div style={howItWorksStyle}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ fontWeight: 800 }}>How hosted checkout works</div>
+            <div style={{ fontSize: 12, opacity: 0.75 }}>
+              Endpoint: <span style={codeStyle}>POST /api/session</span>
+            </div>
+          </div>
+
+          <ol style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 13, opacity: 0.9, lineHeight: "18px" }}>
+            <li>
+              Your system <b>POSTs</b> invoice details to <span style={codeStyle}>/api/session</span> (amount, currency, reference).
+            </li>
+            <li>
+              edge-lab returns a <b>payUrl</b> — you redirect the user to it (hosted payment page).
+            </li>
+            <li>
+              User completes <b>3DS + payment</b>. If you provided a Return URL, edge-lab will <b>POST the final result</b> to it automatically.
+            </li>
+          </ol>
+
+          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>
+            Artisio mapping: <span style={codeStyle}>reference</span> (partner) = <span style={codeStyle}>orderRef</span> (edge-lab).
+          </div>
+        </div>
+
         {/* Form */}
-        <h3 style={{ margin: "0 0 8px" }}>Order</h3>
+        <h3 style={{ margin: "14px 0 8px" }}>Order</h3>
         <label>Amount (GBP)</label>
         <input style={inputStyle} value={amount} onChange={(e) => setAmount(e.target.value)} />
 
-        <label>Order Ref</label>
+        <label>Reference / Order Ref</label>
         <input style={inputStyle} value={orderRef} onChange={(e) => setOrderRef(e.target.value)} />
 
         <h3 style={{ margin: "14px 0 8px" }}>Customer</h3>
@@ -232,7 +275,12 @@ export default function HomePage() {
         <input style={inputStyle} placeholder="Postcode" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
 
         <h3 style={{ margin: "14px 0 8px" }}>Return URL (optional)</h3>
-        <input style={inputStyle} placeholder="https://your-site/return" value={returnUrl} onChange={(e) => setReturnUrl(e.target.value)} />
+        <input
+          style={inputStyle}
+          placeholder="https://your-site/return (edge-lab will POST the result here after payment)"
+          value={returnUrl}
+          onChange={(e) => setReturnUrl(e.target.value)}
+        />
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
           <button

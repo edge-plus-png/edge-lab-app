@@ -28,10 +28,7 @@ export async function POST(req: NextRequest) {
   const xid = body.xid ? String(body.xid) : "";
 
   if (!sessionId || !paymentToken) {
-    return NextResponse.json(
-      { error: "Missing sessionId/paymentToken" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Missing sessionId/paymentToken" }, { status: 400 });
   }
 
   const session = getSession(sessionId);
@@ -43,10 +40,7 @@ export async function POST(req: NextRequest) {
   const privateKeyEnv = cfg.privateKeyEnv || "";
   const privateKey = privateKeyEnv ? process.env[privateKeyEnv] : "";
   if (!privateKey) {
-    return NextResponse.json(
-      { error: `Missing private key ENV: ${privateKeyEnv}` },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: `Missing private key ENV: ${privateKeyEnv}` }, { status: 500 });
   }
 
   // -----------------------------
@@ -147,7 +141,7 @@ export async function POST(req: NextRequest) {
         resultId: result.resultId,
         sessionId: result.sessionId,
 
-        // partner-friendly alias
+        // partner-friendly alias (Artisio)
         reference: result.orderRef,
 
         orderRef: result.orderRef,
@@ -158,17 +152,24 @@ export async function POST(req: NextRequest) {
         ts: new Date().toISOString(),
       };
 
+      // Timeout so a slow partner endpoint doesn't hang the customer flow
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 5000);
+
       const r = await fetch(returnUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+
+      clearTimeout(t);
 
       webhook.ok = r.ok;
       webhook.statusCode = r.status;
     } catch (e: any) {
       webhook.ok = false;
-      webhook.error = e?.message || "Failed to POST to returnUrl";
+      webhook.error = e?.name === "AbortError" ? "Return URL timed out" : e?.message || "Failed to POST to returnUrl";
     }
   }
 
