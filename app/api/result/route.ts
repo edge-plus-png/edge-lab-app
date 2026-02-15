@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
           status: result.status,
           createdAt: result.createdAt,
           gateway: result.gateway || {},
-          raw: result.raw || {},
+          raw: result.raw ?? null,
         }
       : null,
   });
