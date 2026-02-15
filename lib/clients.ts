@@ -10,7 +10,10 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
-      "https://", // demo remains open
+
+      // Built-in webhook sink (demo uses same flow as everyone)
+      "https://demo.edge-lab.uk/api/webhook-sink",
+      "https://demo.edge-lab.uk/webhook-sink",
     ],
   },
 
@@ -20,12 +23,18 @@ const CLIENTS: Record<string, ClientConfig> = {
     currency: "GBP",
     tokenizationKey: process.env.NMI_ANYTIME_TOKENIZATION_KEY || "",
     privateKeyEnv: "NMI_ANYTIME_PRIVATE_KEY",
-  allowedReturnUrlPrefixes: [
-  "http://localhost",
-  "http://127.0.0.1",
-  "https://staging.anytimebooking.com",
-  "https://anytimebooking.com",
-],
+    allowedReturnUrlPrefixes: [
+      "http://localhost",
+      "http://127.0.0.1",
+
+      // Partner return URLs (lock these down as provided)
+      "https://staging.anytimebooking.com",
+      "https://anytimebooking.com",
+
+      // Built-in webhook sink on this tenant (useful for testing)
+      "https://anytime.edge-lab.uk/api/webhook-sink",
+      "https://anytime.edge-lab.uk/webhook-sink",
+    ],
   },
 
   nuco: {
@@ -37,8 +46,14 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
+
+      // Partner return URLs
       "https://nucotraining.com",
       "https://www.nucotraining.com",
+
+      // Built-in webhook sink on this tenant
+      "https://nuco.edge-lab.uk/api/webhook-sink",
+      "https://nuco.edge-lab.uk/webhook-sink",
     ],
   },
 
@@ -51,8 +66,14 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
+
+      // Partner return URLs
       "https://artisio.co",
       "https://www.artisio.co",
+
+      // Built-in webhook sink on this tenant
+      "https://artisio.edge-lab.uk/api/webhook-sink",
+      "https://artisio.edge-lab.uk/webhook-sink",
     ],
   },
 };
