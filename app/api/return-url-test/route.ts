@@ -8,24 +8,32 @@ export async function POST(req: NextRequest) {
   const slug = getSlugFromHost(host);
   const cfg = loadClientConfig(slug);
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const returnUrl = String(body.returnUrl || "");
+
+  if (!returnUrl) {
+    return NextResponse.json({ ok: false, error: "Missing returnUrl" }, { status: 400 });
+  }
 
   try {
     validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: e.message || "Invalid returnUrl" }, { status: 400 });
   }
 
   try {
     const r = await fetch(returnUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ type: "edge_lab_test", client: slug, ts: new Date().toISOString() }),
+      body: JSON.stringify({
+        type: "edge_lab_test",
+        client: slug,
+        ts: new Date().toISOString(),
+      }),
     });
 
     return NextResponse.json({ ok: r.ok, statusCode: r.status });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e.message || "Failed to POST to returnUrl" }, { status: 500 });
   }
 }

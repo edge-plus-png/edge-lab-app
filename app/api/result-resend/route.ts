@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
+import { getResultBySession, getSession } from "@/lib/store";
 import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 
 export async function POST(req: NextRequest) {
@@ -9,35 +10,48 @@ export async function POST(req: NextRequest) {
   const cfg = loadClientConfig(slug);
 
   const body = await req.json().catch(() => ({}));
+  const sessionId = String(body.sessionId || "");
   const returnUrl = String(body.returnUrl || "");
-  const sampleResult = body.sampleResult || null;
 
+  if (!sessionId) {
+    return NextResponse.json({ ok: false, error: "Missing sessionId" }, { status: 400 });
+  }
   if (!returnUrl) {
     return NextResponse.json({ ok: false, error: "Missing returnUrl" }, { status: 400 });
+  }
+
+  // Ensure session belongs to tenant (basic safety)
+  const session = getSession(sessionId);
+  if (!session || session.slug !== slug) {
+    return NextResponse.json({ ok: false, error: "Unknown sessionId" }, { status: 404 });
+  }
+
+  const result = getResultBySession(sessionId);
+  if (!result || result.slug !== slug) {
+    return NextResponse.json({ ok: false, error: "No result for sessionId" }, { status: 404 });
   }
 
   try {
     validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e.message || "Invalid returnUrl" },
-      { status: 400 }
-    );
+    return NextResponse.json({ ok: false, error: e.message || "Invalid returnUrl" }, { status: 400 });
   }
 
-  // Default sample payload if none provided
-  const payload =
-    sampleResult && typeof sampleResult === "object"
-      ? sampleResult
-      : {
-          type: "edge_lab_result_test",
-          client: slug,
-          status: "approved",
-          resultId: "test-123",
-          orderRef: "ORDER-TEST",
-          amount: 10.0,
-          currency: cfg.currency,
-        };
+  const payload = {
+    type: "edge_lab_result",
+    client: slug,
+
+    status: result.status,
+    resultId: result.resultId,
+    sessionId: result.sessionId,
+
+    orderRef: result.orderRef,
+    amount: result.amount,
+    currency: result.currency,
+
+    gateway: result.gateway || {},
+    ts: new Date().toISOString(),
+  };
 
   try {
     const r = await fetch(returnUrl, {
@@ -46,11 +60,8 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(payload),
     });
 
-    return NextResponse.json({ ok: r.ok, status: r.status });
+    return NextResponse.json({ ok: r.ok, statusCode: r.status });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e.message || "Failed to POST to returnUrl" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: e.message || "Failed to POST to returnUrl" }, { status: 500 });
   }
 }
