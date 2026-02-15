@@ -1,33 +1,26 @@
 // lib/webhookSink.ts
-export type WebhookSinkItem = {
+export type SinkItem = {
   id: string;
   receivedAt: number;
   headers: Record<string, string>;
   body: any;
 };
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __EDGE_LAB_WEBHOOK_SINK__: WebhookSinkItem[] | undefined;
-}
+const MAX = 50;
 
-function getStore(): WebhookSinkItem[] {
-  if (!globalThis.__EDGE_LAB_WEBHOOK_SINK__) globalThis.__EDGE_LAB_WEBHOOK_SINK__ = [];
-  return globalThis.__EDGE_LAB_WEBHOOK_SINK__;
-}
+// NOTE: In-memory only. Vercel serverless may reset between invocations.
+// Good enough for demo/testing. If you ever need persistence, we’ll swap to KV/Redis.
+const store: SinkItem[] = [];
 
-export function addSinkItem(item: WebhookSinkItem) {
-  const store = getStore();
+export function addSinkItem(item: SinkItem) {
   store.unshift(item);
-  // keep last 50
-  if (store.length > 50) store.length = 50;
+  if (store.length > MAX) store.length = MAX;
 }
 
 export function listSinkItems() {
-  return getStore();
+  return store;
 }
 
 export function clearSinkItems() {
-  const store = getStore();
   store.length = 0;
 }

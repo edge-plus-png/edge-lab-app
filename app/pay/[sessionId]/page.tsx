@@ -2,12 +2,8 @@ import PayClient from "./PayClient";
 
 const LAB_RED = "#DC2626";
 
-export default async function PayPage({
-  params,
-}: {
-  params: Promise<{ sessionId: string }>;
-}) {
-  const { sessionId } = await params;
+export default function PayPage({ params }: { params: { sessionId: string } }) {
+  const { sessionId } = params;
 
   return (
     <main
@@ -30,7 +26,7 @@ export default async function PayPage({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 52 }} />
+            <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 64 }} />
 
             <div style={{ lineHeight: 1.2 }}>
               <div style={{ fontWeight: 800, fontSize: 14 }}>
@@ -47,7 +43,7 @@ export default async function PayPage({
           </div>
         </div>
 
-        {/* Card container */}
+        {/* Card */}
         <div
           style={{
             borderRadius: 18,
@@ -63,15 +59,7 @@ export default async function PayPage({
           </div>
         </div>
 
-        {/* Footer */}
-        <div
-          style={{
-            marginTop: 18,
-            textAlign: "center",
-            fontSize: 12,
-            opacity: 0.6,
-          }}
-        >
+        <div style={{ marginTop: 18, textAlign: "center", fontSize: 12, opacity: 0.6 }}>
           Powered by <span style={{ fontWeight: 700 }}>edge+</span>
         </div>
       </div>

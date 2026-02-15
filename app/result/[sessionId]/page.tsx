@@ -2,61 +2,67 @@ import ResultClient from "./ResultClient";
 
 const LAB_RED = "#DC2626";
 
-export default async function ResultPage({
-  params,
-}: {
-  params: Promise<{ sessionId: string }>;
-}) {
-  const { sessionId } = await params;
+export default function ResultPage({ params }: { params: { sessionId: string } }) {
+  const { sessionId } = params;
 
   return (
-    <main style={{ maxWidth: 760, margin: "40px auto", fontFamily: "system-ui", padding: "0 16px" }}>
-      {/* Branding header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img src="/edge-lab-logo.png" alt="edge-lab" style={{ height: 56 }} />
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#fafafa",
+        fontFamily: "system-ui",
+        padding: "34px 16px",
+      }}
+    >
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 18,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 64 }} />
 
-          {/* Don’t repeat “edge-lab” (logo already does it) */}
-          <div>
-            <div style={{ fontWeight: 800, letterSpacing: 0.2 }}>Payment Result</div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>View outcome, then optionally POST to your Return URL.</div>
+            <div style={{ lineHeight: 1.2 }}>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>
+                Payment Result
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.65 }}>
+                Webhook + JSON available below
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
+          <div style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>
             Session: <b>{sessionId}</b>
           </div>
+        </div>
 
-          {/* Start another test */}
-          <a
-            href="/"
-            style={{
-              display: "inline-block",
-              marginTop: 10,
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: `1px solid ${LAB_RED}`,
-              background: "#fff",
-              color: LAB_RED,
-              fontSize: 13,
-              fontWeight: 800,
-              textDecoration: "none",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = "0 10px 22px rgba(220,38,38,0.18)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = "none";
-            }}
-            title="Back to the main page to create a new session"
-          >
-            ← Start another test
-          </a>
+        {/* Card */}
+        <div
+          style={{
+            borderRadius: 18,
+            background: "#fff",
+            border: "1px solid #eee",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ height: 5, background: LAB_RED }} />
+          <div style={{ padding: 22 }}>
+            <ResultClient sessionId={sessionId} />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 18, textAlign: "center", fontSize: 12, opacity: 0.6 }}>
+          Powered by <span style={{ fontWeight: 700 }}>edge+</span>
         </div>
       </div>
-
-      <ResultClient sessionId={sessionId} />
     </main>
   );
 }
