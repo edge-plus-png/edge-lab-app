@@ -5,6 +5,10 @@ import { loadClientConfig } from "@/lib/clients";
 import { getResultBySession, getSession } from "@/lib/store";
 import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 
+function modeFromHost(host: string) {
+  return host.toLowerCase().includes("staging.") ? "test" : "test";
+}
+
 export async function POST(req: NextRequest) {
   const host = req.headers.get("host") || "";
   const slug = getSlugFromHost(host);
@@ -14,14 +18,9 @@ export async function POST(req: NextRequest) {
   const sessionId = String(body.sessionId || "");
   const returnUrl = String(body.returnUrl || "");
 
-  if (!sessionId) {
-    return NextResponse.json({ ok: false, error: "Missing sessionId" }, { status: 400 });
-  }
-  if (!returnUrl) {
-    return NextResponse.json({ ok: false, error: "Missing returnUrl" }, { status: 400 });
-  }
+  if (!sessionId) return NextResponse.json({ ok: false, error: "Missing sessionId" }, { status: 400 });
+  if (!returnUrl) return NextResponse.json({ ok: false, error: "Missing returnUrl" }, { status: 400 });
 
-  // Ensure session belongs to tenant (basic safety)
   const session = getSession(sessionId);
   if (!session || session.slug !== slug) {
     return NextResponse.json({ ok: false, error: "Unknown sessionId" }, { status: 404 });
@@ -39,22 +38,31 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = {
-    type: "edge_lab_result",
+    event: "payment.completed",
     client: slug,
-
+    mode: modeFromHost(host),
     status: result.status,
-    resultId: result.resultId,
-    sessionId: result.sessionId,
 
-    // ✅ partner-friendly alias (artisio expects reference)
+    session_id: result.sessionId,
+    result_id: result.resultId,
     reference: result.orderRef,
 
-    orderRef: result.orderRef,
     amount: result.amount,
     currency: result.currency,
 
-    gateway: result.gateway || {},
-    ts: new Date().toISOString(),
+    gateway: {
+      transaction_id: result.gateway?.transactionId,
+      response_code: result.gateway?.responseCode,
+      message: result.gateway?.message,
+      auth_code: result.gateway?.authCode,
+      avs: result.gateway?.avs,
+      cvv: result.gateway?.cvv,
+      eci: result.gateway?.eci,
+      cavv: result.gateway?.cavv,
+      three_ds_version: result.gateway?.threeDsVersion,
+    },
+
+    created_at: new Date(result.createdAt).toISOString(),
   };
 
   try {
@@ -66,9 +74,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: r.ok, statusCode: r.status });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e.message || "Failed to POST to returnUrl" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: e.message || "Failed to POST to returnUrl" }, { status: 500 });
   }
 }

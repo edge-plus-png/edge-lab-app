@@ -9,6 +9,12 @@ function newId() {
   return crypto.randomUUID().replace(/-/g, "");
 }
 
+function modeFromHost(host: string) {
+  // staging.edge-lab.uk -> test
+  // prod later could be live if you want
+  return host.toLowerCase().includes("staging.") ? "test" : "test";
+}
+
 export async function POST(req: NextRequest) {
   const host = req.headers.get("host") || "";
   const slug = getSlugFromHost(host);
@@ -49,7 +55,7 @@ export async function POST(req: NextRequest) {
   const form = new URLSearchParams();
   form.set("security_key", privateKey);
   form.set("type", "sale");
-  form.set("processor_id", "ecom"); // your requirement
+  form.set("processor_id", "ecom");
 
   form.set("amount", String(session.amount.toFixed(2)));
   form.set("currency", session.currency);
@@ -97,12 +103,12 @@ export async function POST(req: NextRequest) {
     amount: session.amount,
     currency: session.currency,
     gateway: {
-      transactionId: parsed.transactionid || "",
-      message: parsed.responsetext || "",
-      responseCode: parsed.response_code || "",
-      authCode: parsed.authcode,
-      avs: parsed.avsresponse,
-      cvv: parsed.cvvresponse,
+      transactionId: (parsed.transactionid as string) || "",
+      message: (parsed.responsetext as string) || "",
+      responseCode: (parsed.response_code as string) || "",
+      authCode: parsed.authcode as string | undefined,
+      avs: parsed.avsresponse as string | undefined,
+      cvv: parsed.cvvresponse as string | undefined,
 
       // 3DS fields (prefer gateway echo, fallback to client-provided)
       eci: (parsed.eci as string) || eci,
@@ -119,10 +125,10 @@ export async function POST(req: NextRequest) {
   });
 
   // -----------------------------
-  // Auto POST to Return URL (if set)
+  // Auto POST webhook to Return URL (if set)
   // Do NOT fail the payment if webhook fails.
   // -----------------------------
-  let webhook: { attempted: boolean; ok?: boolean; statusCode?: number; error?: string } = {
+  const webhook: { attempted: boolean; ok?: boolean; statusCode?: number; error?: string } = {
     attempted: false,
   };
 
@@ -134,42 +140,44 @@ export async function POST(req: NextRequest) {
       validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
 
       const payload = {
-        type: "edge_lab_result",
+        event: "payment.completed",
         client: slug,
-
+        mode: modeFromHost(host),
         status: result.status,
-        resultId: result.resultId,
-        sessionId: result.sessionId,
 
-        // partner-friendly alias (Artisio)
+        session_id: result.sessionId,
+        result_id: result.resultId,
         reference: result.orderRef,
 
-        orderRef: result.orderRef,
         amount: result.amount,
         currency: result.currency,
 
-        gateway: result.gateway || {},
-        ts: new Date().toISOString(),
-      };
+        gateway: {
+          transaction_id: result.gateway?.transactionId,
+          response_code: result.gateway?.responseCode,
+          message: result.gateway?.message,
+          auth_code: result.gateway?.authCode,
+          avs: result.gateway?.avs,
+          cvv: result.gateway?.cvv,
+          eci: result.gateway?.eci,
+          cavv: result.gateway?.cavv,
+          three_ds_version: result.gateway?.threeDsVersion,
+        },
 
-      // Timeout so a slow partner endpoint doesn't hang the customer flow
-      const controller = new AbortController();
-      const t = setTimeout(() => controller.abort(), 5000);
+        created_at: new Date(result.createdAt).toISOString(),
+      };
 
       const r = await fetch(returnUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
-        signal: controller.signal,
       });
-
-      clearTimeout(t);
 
       webhook.ok = r.ok;
       webhook.statusCode = r.status;
     } catch (e: any) {
       webhook.ok = false;
-      webhook.error = e?.name === "AbortError" ? "Return URL timed out" : e?.message || "Failed to POST to returnUrl";
+      webhook.error = e?.message || "Failed to POST to returnUrl";
     }
   }
 
