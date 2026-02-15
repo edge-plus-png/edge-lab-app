@@ -10,7 +10,7 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
-      "https://",
+      "https://", // demo remains open
     ],
   },
 
@@ -20,11 +20,12 @@ const CLIENTS: Record<string, ClientConfig> = {
     currency: "GBP",
     tokenizationKey: process.env.NMI_ANYTIME_TOKENIZATION_KEY || "",
     privateKeyEnv: "NMI_ANYTIME_PRIVATE_KEY",
-    allowedReturnUrlPrefixes: [
-      "http://localhost",
-      "http://127.0.0.1",
-      "https://",
-    ],
+  allowedReturnUrlPrefixes: [
+  "http://localhost",
+  "http://127.0.0.1",
+  "https://staging.anytimebooking.com",
+  "https://anytimebooking.com",
+],
   },
 
   nuco: {
@@ -36,7 +37,8 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
-      "https://",
+      "https://nucotraining.com",
+      "https://www.nucotraining.com",
     ],
   },
 
@@ -49,7 +51,8 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
-      "https://",
+      "https://artisio.co",
+      "https://www.artisio.co",
     ],
   },
 };
