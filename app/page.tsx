@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 
+const LAB_RED = "#DC2626";
+
 export default function HomePage() {
   const [tenant, setTenant] = useState<string>("");
-  const isDemo = tenant === "demo";
-
   const [amount, setAmount] = useState("10.00");
   const [orderRef, setOrderRef] = useState("ORDER-0000");
   const [returnUrl, setReturnUrl] = useState("");
@@ -17,25 +17,17 @@ export default function HomePage() {
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const RED = "#DC2626";
+  const isDemo = tenant === "demo";
 
+  // Basic styles
   const btnBase: React.CSSProperties = {
     padding: "10px 12px",
-    border: "1px solid #cfcfcf",
-    borderRadius: 10,
+    border: "1px solid #d0d0d0",
+    borderRadius: 12,
     background: "#fff",
     cursor: "pointer",
     fontSize: 14,
-  };
-
-  const btnPrimary: React.CSSProperties = {
-    padding: "12px 16px",
-    borderRadius: 10,
-    border: `1px solid ${RED}`,
-    background: RED,
-    color: "#fff",
-    fontWeight: 700,
-    cursor: "pointer",
+    lineHeight: "18px",
   };
 
   const btnDisabled: React.CSSProperties = {
@@ -43,13 +35,31 @@ export default function HomePage() {
     cursor: "not-allowed",
   };
 
+  const btnPrimary: React.CSSProperties = {
+    ...btnBase,
+    background: LAB_RED,
+    borderColor: LAB_RED,
+    color: "#fff",
+    fontWeight: 800,
+    padding: "12px 14px",
+    minWidth: 280,
+  };
+
   const inputStyle: React.CSSProperties = {
     width: "100%",
     margin: "6px 0 12px",
-    padding: "10px 12px",
-    borderRadius: 10,
+    padding: "12px 12px",
+    borderRadius: 12,
     border: "1px solid #ddd",
     fontSize: 14,
+    outlineColor: LAB_RED,
+  };
+
+  const cardStyle: React.CSSProperties = {
+    border: "1px solid #eee",
+    borderRadius: 16,
+    padding: 18,
+    background: "#fff",
   };
 
   useEffect(() => {
@@ -57,6 +67,11 @@ export default function HomePage() {
     setTenant(t);
     setOrderRef(`ORDER-${Math.floor(Math.random() * 10000)}`);
   }, []);
+
+  function newOrderRef() {
+    setOrderRef(`ORDER-${Math.floor(Math.random() * 10000)}`);
+    setInfo("New orderRef generated.");
+  }
 
   async function create() {
     setError(null);
@@ -122,7 +137,7 @@ export default function HomePage() {
         return;
       }
 
-      setInfo(`Return URL test sent successfully`);
+      setInfo(`Return URL test sent (${data.statusCode || data.status || "OK"})`);
     } catch (e: any) {
       setError(e?.message || "Unexpected error");
     } finally {
@@ -131,156 +146,119 @@ export default function HomePage() {
   }
 
   return (
-    <main
-      style={{
-        maxWidth: 760,
-        margin: "40px auto",
-        fontFamily: "system-ui",
-        padding: "0 16px",
-      }}
-    >
+    <main style={{ maxWidth: 980, margin: "34px auto", fontFamily: "system-ui", padding: "0 18px" }}>
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 24,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 36 }} />
+          {/* Put your logo in /public/edge-lab-logo.png */}
+          <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 34 }} />
           <div>
-            <div style={{ fontWeight: 800, fontSize: 18 }}>
-              edge<span style={{ color: RED }}> lab</span>
-            </div>
-            <div style={{ fontSize: 12, opacity: 0.6 }}>
-              Payment & 3DS Testing Environment
-            </div>
+            {/* Don’t repeat “edge lab” here — logo already covers it */}
+            <div style={{ fontWeight: 800, letterSpacing: 0.2 }}>Payment & 3DS Testing Environment</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>Create a session, complete 3DS, and optionally POST results to your Return URL.</div>
           </div>
-        </div>
 
-        <div style={{ fontSize: 13, opacity: 0.7 }}>
-          Tenant: <b>{tenant || "…"}</b>
           {isDemo && (
             <span
               style={{
-                marginLeft: 10,
-                padding: "2px 8px",
-                borderRadius: 8,
-                background: "#fee",
-                color: RED,
+                marginLeft: 8,
+                padding: "4px 10px",
+                borderRadius: 999,
+                background: "#fee2e2",
+                color: "#991b1b",
                 fontSize: 12,
-                fontWeight: 600,
+                fontWeight: 800,
               }}
             >
               DEMO
             </span>
           )}
         </div>
+
+        <div style={{ fontSize: 13, opacity: 0.85 }}>
+          Tenant: <b>{tenant || "…"}</b>
+        </div>
       </div>
 
-      <p style={{ marginBottom: 20, opacity: 0.8 }}>
-        Create a payment session, complete a real 3DS authentication, and send the result to your Return URL.
-      </p>
-
+      {/* Alerts */}
       {error && (
-        <div
-          style={{
-            padding: 12,
-            background: "#fee",
-            borderRadius: 10,
-            border: `1px solid ${RED}`,
-            marginBottom: 16,
-          }}
-        >
+        <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, marginBottom: 12, border: "1px solid #fecaca" }}>
           <b>Error:</b> {error}
         </div>
       )}
-
       {info && (
-        <div
-          style={{
-            padding: 12,
-            background: "#eef7ee",
-            borderRadius: 10,
-            border: "1px solid #bfe3bf",
-            marginBottom: 16,
-          }}
-        >
+        <div style={{ padding: 12, background: "#ecfdf5", borderRadius: 12, marginBottom: 12, border: "1px solid #bbf7d0" }}>
           {info}
         </div>
       )}
 
-      {/* Order */}
-      <h3>Order</h3>
-      <label>Amount (GBP)</label>
-      <input style={inputStyle} value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <div style={cardStyle}>
+        {/* Quick actions (restored) */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <button type="button" onClick={() => setAmount("10.00")} disabled={busy} style={busy ? { ...btnBase, ...btnDisabled } : btnBase}>
+            Approve (10.00)
+          </button>
 
-      <label>Order Ref</label>
-      <input style={inputStyle} value={orderRef} onChange={(e) => setOrderRef(e.target.value)} />
+          <button type="button" onClick={() => setAmount("10.01")} disabled={busy} style={busy ? { ...btnBase, ...btnDisabled } : btnBase}>
+            Decline (10.01)
+          </button>
 
-      {/* Customer */}
-      <h3 style={{ marginTop: 20 }}>Customer</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <input
-          style={{ ...inputStyle, margin: 0 }}
-          placeholder="First name"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-        />
-        <input
-          style={{ ...inputStyle, margin: 0 }}
-          placeholder="Last name"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-        />
+          <button type="button" onClick={() => setAmount("0.00")} disabled={busy} style={busy ? { ...btnBase, ...btnDisabled } : btnBase}>
+            Error (0.00)
+          </button>
+
+          <button type="button" onClick={newOrderRef} disabled={busy} style={busy ? { ...btnBase, ...btnDisabled } : btnBase}>
+            New Order Ref
+          </button>
+        </div>
+
+        <hr style={{ margin: "14px 0", border: 0, borderTop: "1px solid #eee" }} />
+
+        {/* Form */}
+        <h3 style={{ margin: "0 0 8px" }}>Order</h3>
+        <label>Amount (GBP)</label>
+        <input style={inputStyle} value={amount} onChange={(e) => setAmount(e.target.value)} />
+
+        <label>Order Ref</label>
+        <input style={inputStyle} value={orderRef} onChange={(e) => setOrderRef(e.target.value)} />
+
+        <h3 style={{ margin: "14px 0 8px" }}>Customer</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <input style={{ ...inputStyle, margin: 0 }} placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+          <input style={{ ...inputStyle, margin: 0 }} placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+        </div>
+
+        <input style={inputStyle} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input style={inputStyle} placeholder="Postcode" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
+
+        <h3 style={{ margin: "14px 0 8px" }}>Return URL (optional)</h3>
+        <input style={inputStyle} placeholder="https://your-site/return" value={returnUrl} onChange={(e) => setReturnUrl(e.target.value)} />
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
+          <button
+            style={busy ? { ...btnPrimary, ...btnDisabled } : btnPrimary}
+            onClick={create}
+            disabled={busy}
+            title="Creates a session and opens the hosted payment page"
+          >
+            {busy ? "Working..." : "Create session & go to payment"}
+          </button>
+
+          <button
+            style={busy || !returnUrl ? { ...btnBase, ...btnDisabled } : btnBase}
+            type="button"
+            onClick={testReturnUrl}
+            disabled={busy || !returnUrl}
+            title="Send a sample payload to your Return URL"
+          >
+            Test Return URL
+          </button>
+        </div>
+
+        <p style={{ fontSize: 12.5, opacity: 0.7, marginTop: 10 }}>
+          Local tip: <code>demo.localhost:3000</code> is for local development only. For real 3DS + gateway testing, use staging.
+        </p>
       </div>
-
-      <input
-        style={{ ...inputStyle, marginTop: 8 }}
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-
-      <input
-        style={{ ...inputStyle, marginTop: 8 }}
-        placeholder="Postcode"
-        value={postalCode}
-        onChange={(e) => setPostalCode(e.target.value)}
-      />
-
-      {/* Return URL */}
-      <h3 style={{ marginTop: 20 }}>Return URL (optional)</h3>
-      <input
-        style={inputStyle}
-        placeholder="https://your-site/return"
-        value={returnUrl}
-        onChange={(e) => setReturnUrl(e.target.value)}
-      />
-
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <button
-          style={busy ? { ...btnPrimary, ...btnDisabled } : btnPrimary}
-          onClick={create}
-          disabled={busy}
-        >
-          {busy ? "Working..." : "Create session & go to payment"}
-        </button>
-
-        <button
-          style={busy || !returnUrl ? { ...btnBase, ...btnDisabled } : btnBase}
-          onClick={testReturnUrl}
-          disabled={busy || !returnUrl}
-        >
-          Test Return URL
-        </button>
-      </div>
-
-      <p style={{ fontSize: 13, opacity: 0.6, marginTop: 18 }}>
-        Tip: Use <code>demo.localhost:3000</code> as your generic demo tenant.
-      </p>
     </main>
   );
 }
