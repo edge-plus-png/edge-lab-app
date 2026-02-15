@@ -2,8 +2,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PRODUCTS } from "./_data";
-import { addToCart, loadCart } from "./_cart";
+import { PRODUCTS } from "../_data";
+import { addToCart, loadCart } from "../_cart";
 
 const LAB_RED = "#DC2626";
 
