@@ -2,7 +2,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { cartTotal, loadCart, type CartItem } from "../_cart";
+import type { CartItem } from "../_cart";
+import { cartTotal, loadCart } from "../_cart";
 
 const LAB_RED = "#DC2626";
 
@@ -11,26 +12,27 @@ export default function CheckoutPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Partner-style reference (Artisio uses "reference")
+  // “partner style” reference
   const [reference, setReference] = useState("INV-10001");
 
-  // Webhook receiver (demo sink)
+  // Return URL (demo sink)
   const [returnUrl, setReturnUrl] = useState("");
 
-  // Required by your /api/session route
+  // Customer (required by your API)
   const [firstName, setFirstName] = useState("John");
   const [lastName, setLastName] = useState("Smith");
   const [email, setEmail] = useState("john@example.com");
   const [postalCode, setPostalCode] = useState("SW1A 1AA");
 
   useEffect(() => {
-    const c = loadCart();
-    setItems(c);
+    setItems(loadCart());
 
-    // If user opened /webhook-sink?token=... we can reuse the same token for checkout
+    // Prefill demo sink URL if token exists
     const token = new URLSearchParams(window.location.search).get("token") || "";
     if (token) {
-      setReturnUrl(`https://demo.edge-lab.uk/api/webhook-sink?token=${encodeURIComponent(token)}`);
+      setReturnUrl(
+        `https://demo.edge-lab.uk/api/webhook-sink?token=${encodeURIComponent(token)}`
+      );
     }
   }, []);
 
@@ -72,7 +74,7 @@ export default function CheckoutPage() {
           <div>
             <div style={{ fontWeight: 900 }}>Checkout</div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>
-              Simulates a partner site: POST invoice → redirect to hosted payUrl → webhook result.
+              Partner flow: POST invoice → redirect to hosted payUrl → webhook result.
             </div>
           </div>
         </div>
@@ -92,15 +94,14 @@ export default function CheckoutPage() {
         <div style={{ height: 5, background: LAB_RED }} />
 
         <div style={{ padding: 18, display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 18 }}>
-          {/* Left */}
           <div>
             <h3 style={{ marginTop: 0 }}>Invoice / Order</h3>
 
-            <label style={{ fontSize: 13, opacity: 0.8 }}>Reference (partner field)</label>
-            <input value={reference} onChange={(e) => setReference(e.target.value)} style={inputStyle()} placeholder="INV-10001" />
+            <label style={{ fontSize: 13, opacity: 0.8 }}>Reference</label>
+            <input value={reference} onChange={(e) => setReference(e.target.value)} style={inputStyle()} />
 
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: -4 }}>
-              edge-lab maps <b>reference</b> → <b>orderRef</b> internally.
+              edge-lab maps <b>reference</b> → <b>orderRef</b>.
             </div>
 
             <h3 style={{ marginTop: 18 }}>Customer</h3>
@@ -114,21 +115,16 @@ export default function CheckoutPage() {
             <input style={inputStyle()} value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="Postcode" />
 
             <h3 style={{ marginTop: 18 }}>Return URL (webhook receiver)</h3>
-            <input
-              style={inputStyle()}
-              value={returnUrl}
-              onChange={(e) => setReturnUrl(e.target.value)}
-              placeholder="https://your-site.com/webhook/edge"
-            />
+            <input style={inputStyle()} value={returnUrl} onChange={(e) => setReturnUrl(e.target.value)} placeholder="https://your-site.com/webhook" />
 
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: -4 }}>
-              After payment, edge-lab will POST the final result to this URL automatically.
+              After payment, edge-lab POSTs the final result here automatically.
             </div>
 
             <button
               type="button"
               onClick={startHostedCheckout}
-              disabled={busy || items.length === 0 || total <= 0}
+              disabled={busy || items.length === 0}
               style={{
                 marginTop: 16,
                 width: "100%",
@@ -139,8 +135,8 @@ export default function CheckoutPage() {
                 color: "#fff",
                 fontWeight: 900,
                 fontSize: 16,
-                cursor: busy || items.length === 0 || total <= 0 ? "not-allowed" : "pointer",
-                opacity: busy || items.length === 0 || total <= 0 ? 0.6 : 1,
+                cursor: busy || items.length === 0 ? "not-allowed" : "pointer",
+                opacity: busy || items.length === 0 ? 0.6 : 1,
               }}
             >
               {busy ? "Creating session…" : "Pay via hosted checkout →"}
@@ -151,7 +147,6 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Right */}
           <div style={{ border: "1px solid #eee", borderRadius: 14, padding: 14, background: "#fafafa" }}>
             <div style={{ fontWeight: 900 }}>Order summary</div>
 
@@ -175,15 +170,6 @@ export default function CheckoutPage() {
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <div style={{ fontWeight: 900 }}>Total</div>
               <div style={{ fontWeight: 900 }}>£{total.toFixed(2)}</div>
-            </div>
-
-            <div style={{ marginTop: 12, fontSize: 12, opacity: 0.75 }}>
-              Test outcomes by total:
-              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-                <li>£10.00 → approve</li>
-                <li>£10.01 → decline</li>
-                <li>£0.00 → error</li>
-              </ul>
             </div>
           </div>
         </div>
