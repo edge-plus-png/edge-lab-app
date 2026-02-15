@@ -2,27 +2,27 @@
 export type Product = {
   id: string;
   name: string;
-  price: number; // GBP
   description: string;
+  price: number;
 };
 
 export const PRODUCTS: Product[] = [
   {
-    id: "setup-10",
-    name: "edge+ Demo Service (£10)",
+    id: "p1",
+    name: "Demo Ticket",
+    description: "A simple demo product used to simulate a real checkout flow.",
     price: 10.0,
-    description: "Use this to force an APPROVE path in demos.",
   },
   {
-    id: "setup-1001",
-    name: "edge+ Demo Service (£10.01)",
-    price: 10.01,
-    description: "Use this to force a DECLINE path in demos.",
+    id: "p2",
+    name: "Training Session",
+    description: "A service-style item (good for booking platforms).",
+    price: 15.0,
   },
   {
-    id: "setup-0",
-    name: "edge+ Demo Service (£0.00)",
-    price: 0.0,
-    description: "Use this to force an ERROR path in demos.",
+    id: "p3",
+    name: "Membership",
+    description: "Recurring-style concept (still a one-off payment in the demo).",
+    price: 20.0,
   },
 ];

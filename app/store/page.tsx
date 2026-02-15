@@ -16,7 +16,6 @@ export default function StorePage() {
 
   return (
     <main style={{ maxWidth: 980, margin: "34px auto", fontFamily: "system-ui", padding: "0 18px" }}>
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 64 }} />

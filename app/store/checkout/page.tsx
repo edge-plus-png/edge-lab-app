@@ -11,22 +11,23 @@ export default function CheckoutPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // “partner style” reference
+  // Partner-style reference (Artisio uses "reference")
   const [reference, setReference] = useState("INV-10001");
 
-  // Return URL (demo sink)
+  // Webhook receiver (demo sink)
   const [returnUrl, setReturnUrl] = useState("");
 
-  // Customer (required by your API)
+  // Required by your /api/session route
   const [firstName, setFirstName] = useState("John");
   const [lastName, setLastName] = useState("Smith");
   const [email, setEmail] = useState("john@example.com");
   const [postalCode, setPostalCode] = useState("SW1A 1AA");
 
   useEffect(() => {
-    setItems(loadCart());
+    const c = loadCart();
+    setItems(c);
 
-    // Prefill demo sink URL automatically (token stays in URL)
+    // If user opened /webhook-sink?token=... we can reuse the same token for checkout
     const token = new URLSearchParams(window.location.search).get("token") || "";
     if (token) {
       setReturnUrl(`https://demo.edge-lab.uk/api/webhook-sink?token=${encodeURIComponent(token)}`);
@@ -44,14 +45,10 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          // ✅ partner payload style supported by your /api/session route
           amount: Number(total.toFixed(2)),
           currency_code: "GBP",
           reference,
-
-          // ✅ this is what receives the webhook after payment
           returnUrl: returnUrl || undefined,
-
           customer: { firstName, lastName, email, postalCode },
         }),
       });
@@ -75,7 +72,7 @@ export default function CheckoutPage() {
           <div>
             <div style={{ fontWeight: 900 }}>Checkout</div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>
-              This simulates a partner site: POST invoice → redirect to hosted payUrl → webhook result.
+              Simulates a partner site: POST invoice → redirect to hosted payUrl → webhook result.
             </div>
           </div>
         </div>
@@ -100,12 +97,7 @@ export default function CheckoutPage() {
             <h3 style={{ marginTop: 0 }}>Invoice / Order</h3>
 
             <label style={{ fontSize: 13, opacity: 0.8 }}>Reference (partner field)</label>
-            <input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              style={inputStyle()}
-              placeholder="INV-10001"
-            />
+            <input value={reference} onChange={(e) => setReference(e.target.value)} style={inputStyle()} placeholder="INV-10001" />
 
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: -4 }}>
               edge-lab maps <b>reference</b> → <b>orderRef</b> internally.
@@ -136,7 +128,7 @@ export default function CheckoutPage() {
             <button
               type="button"
               onClick={startHostedCheckout}
-              disabled={busy || items.length === 0}
+              disabled={busy || items.length === 0 || total <= 0}
               style={{
                 marginTop: 16,
                 width: "100%",
@@ -147,8 +139,8 @@ export default function CheckoutPage() {
                 color: "#fff",
                 fontWeight: 900,
                 fontSize: 16,
-                cursor: busy || items.length === 0 ? "not-allowed" : "pointer",
-                opacity: busy || items.length === 0 ? 0.6 : 1,
+                cursor: busy || items.length === 0 || total <= 0 ? "not-allowed" : "pointer",
+                opacity: busy || items.length === 0 || total <= 0 ? 0.6 : 1,
               }}
             >
               {busy ? "Creating session…" : "Pay via hosted checkout →"}
@@ -162,6 +154,7 @@ export default function CheckoutPage() {
           {/* Right */}
           <div style={{ border: "1px solid #eee", borderRadius: 14, padding: 14, background: "#fafafa" }}>
             <div style={{ fontWeight: 900 }}>Order summary</div>
+
             <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
               {items.length === 0 ? (
                 <div style={{ opacity: 0.7 }}>No items in cart.</div>
@@ -185,7 +178,7 @@ export default function CheckoutPage() {
             </div>
 
             <div style={{ marginTop: 12, fontSize: 12, opacity: 0.75 }}>
-              Approve/decline/error is controlled by the total amount:
+              Test outcomes by total:
               <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
                 <li>£10.00 → approve</li>
                 <li>£10.01 → decline</li>
