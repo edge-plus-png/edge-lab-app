@@ -1,5 +1,7 @@
 import PayClient from "./PayClient";
 
+const LAB_RED = "#DC2626";
+
 export default async function PayPage({
   params,
 }: {
@@ -7,70 +9,71 @@ export default async function PayPage({
 }) {
   const { sessionId } = await params;
 
-  const RED = "#DC2626";
-
   return (
     <main
       style={{
-        maxWidth: 640,
-        margin: "40px auto",
+        minHeight: "100vh",
+        background: "#fafafa",
         fontFamily: "system-ui",
-        padding: "0 16px",
+        padding: "34px 16px",
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 28,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img
-            src="/edge-lab-logo.png"
-            alt="edge lab"
-            style={{ height: 36 }}
-          />
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 18 }}>
-              edge<span style={{ color: RED }}> lab</span>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 18,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 52 }} />
+
+            <div style={{ lineHeight: 1.2 }}>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>
+                Secure Payment Authentication
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.65 }}>
+                3DS is required before charging
+              </div>
             </div>
-            <div style={{ fontSize: 12, opacity: 0.6 }}>
-              Secure Payment Authentication
-            </div>
+          </div>
+
+          <div style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>
+            Session: <b>{sessionId}</b>
           </div>
         </div>
 
-        <div style={{ fontSize: 12, opacity: 0.7 }}>
-          Session: <b>{sessionId}</b>
+        {/* Card container */}
+        <div
+          style={{
+            borderRadius: 18,
+            background: "#fff",
+            border: "1px solid #eee",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ height: 5, background: LAB_RED }} />
+          <div style={{ padding: 22 }}>
+            <PayClient sessionId={sessionId} />
+          </div>
         </div>
-      </div>
 
-      {/* Card container */}
-      <div
-        style={{
-          border: "1px solid #e6e6e6",
-          borderRadius: 16,
-          padding: 20,
-          background: "#fff",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.04)",
-        }}
-      >
-        <PayClient sessionId={sessionId} />
-      </div>
-
-      {/* Footer */}
-      <div
-        style={{
-          marginTop: 28,
-          textAlign: "center",
-          fontSize: 12,
-          opacity: 0.6,
-        }}
-      >
-        Powered by <span style={{ fontWeight: 600 }}>edge+</span>
+        {/* Footer */}
+        <div
+          style={{
+            marginTop: 18,
+            textAlign: "center",
+            fontSize: 12,
+            opacity: 0.6,
+          }}
+        >
+          Powered by <span style={{ fontWeight: 700 }}>edge+</span>
+        </div>
       </div>
     </main>
   );
