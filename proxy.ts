@@ -5,21 +5,10 @@ import { NextResponse } from "next/server";
 function getTenantFromHost(hostHeader: string) {
   const host = (hostHeader || "").split(":")[0].toLowerCase();
 
-  // Local dev
-  if (host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1") {
-    return "demo";
-  }
+  if (host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1") return "demo";
+  if (host.endsWith(".vercel.app")) return "demo";
 
-  // Vercel preview/prod default domains
-  if (host.endsWith(".vercel.app")) {
-    return "demo";
-  }
-
-  // edge-lab.uk subdomains
-  const parts = host.split(".");
-  const sub = parts[0] || "demo";
-
-  // staging.edge-lab.uk behaves like demo tenant
+  const sub = host.split(".")[0] || "demo";
   if (sub === "staging") return "demo";
 
   return sub;
@@ -27,19 +16,31 @@ function getTenantFromHost(hostHeader: string) {
 
 const ALLOWED_TENANTS = new Set(["demo", "anytime", "nuco", "prismpay", "artisio"]);
 
+function isStaticAsset(path: string) {
+  // allow /edge-lab-logo.png, /file.svg, etc.
+  return /\.[a-z0-9]+$/i.test(path);
+}
+
 export function proxy(req: NextRequest) {
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
+  const slug = getTenantFromHost(host);
+  const tenant = ALLOWED_TENANTS.has(slug) ? slug : "demo";
 
-  // 🔒 Store staging isolation (only /store routes)
+  // 🔒 Store staging isolation (ONLY redirect page routes)
   if (host === "demo-store-staging.edge-lab.uk") {
     const path = req.nextUrl.pathname;
-    if (!path.startsWith("/store")) {
+
+    const allow =
+      path.startsWith("/store") ||
+      path.startsWith("/api") ||
+      path.startsWith("/_next") ||
+      path === "/favicon.ico" ||
+      isStaticAsset(path);
+
+    if (!allow) {
       return NextResponse.redirect(new URL("/store", req.url));
     }
   }
-
-  const slug = getTenantFromHost(host);
-  const tenant = ALLOWED_TENANTS.has(slug) ? slug : "demo";
 
   const res = NextResponse.next();
   res.headers.set("x-edge-lab-tenant", tenant);
