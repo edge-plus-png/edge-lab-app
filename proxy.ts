@@ -5,9 +5,17 @@ import { NextResponse } from "next/server";
 function getTenantFromHost(hostHeader: string) {
   const host = (hostHeader || "").split(":")[0].toLowerCase();
 
-  if (host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1") return "demo";
+  // Local dev
+  if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) return "demo";
+
+  // Vercel preview/prod default domains
   if (host.endsWith(".vercel.app")) return "demo";
 
+  // Force store domains to behave like demo tenant
+  if (host === "demo-store-staging.edge-lab.uk") return "demo";
+  if (host === "demo-store.edge-lab.uk") return "demo";
+
+  // staging.edge-lab.uk behaves like demo
   const sub = host.split(".")[0] || "demo";
   if (sub === "staging") return "demo";
 
@@ -21,7 +29,12 @@ function isStaticAsset(path: string) {
   return /\.[a-z0-9]+$/i.test(path);
 }
 
-export function proxy(req: NextRequest) {
+/**
+ * IMPORTANT:
+ * Next.js will run this function for every request handled by proxy.ts
+ * Default export is the most reliable way to satisfy Turbopack.
+ */
+export default function proxy(req: NextRequest) {
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
   const slug = getTenantFromHost(host);
   const tenant = ALLOWED_TENANTS.has(slug) ? slug : "demo";
