@@ -7,27 +7,33 @@ import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 
 /**
  * CORS
- * Demo 2 (partner site) lives on demo-store(-staging).edge-lab.uk
- * and calls demo.edge-lab.uk from the browser (so needs CORS).
+ * Demo partner sites live on demo-store(-staging).edge-lab.uk
+ * and call demo.edge-lab.uk from the browser.
  */
-const ALLOW_ORIGINS = [
+const ALLOW_ORIGINS = new Set([
   "https://demo-store-staging.edge-lab.uk",
   "https://demo-store.edge-lab.uk",
-];
+]);
 
 function corsHeaders(req: NextRequest) {
   const origin = req.headers.get("origin") || "";
-  const allowOrigin = ALLOW_ORIGINS.includes(origin) ? origin : "";
+
+  // If origin is one of our demo stores, echo it back (best practice).
+  // If origin is missing (server-to-server / some tools), allow it.
+  const allowOrigin = ALLOW_ORIGINS.has(origin) ? origin : "";
 
   const headers: Record<string, string> = {
     "access-control-allow-methods": "GET,POST,OPTIONS",
     "access-control-allow-headers": "content-type",
     "access-control-max-age": "600",
     vary: "origin",
+    // Debug helper so you can see what Origin the server received
+    "x-edge-origin": origin,
   };
 
-  // Only set allow-origin when it's on the allowlist
-  if (allowOrigin) headers["access-control-allow-origin"] = allowOrigin;
+  if (allowOrigin) {
+    headers["access-control-allow-origin"] = allowOrigin;
+  }
 
   return headers;
 }
@@ -37,11 +43,9 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 function resolveTenant(req: NextRequest) {
-  // Prefer proxy-provided tenant
   const hdr = req.headers.get("x-edge-lab-tenant");
   if (hdr) return hdr;
 
-  // Fallback
   const host = req.headers.get("host") || "";
   return getSlugFromHost(host);
 }
@@ -90,7 +94,6 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
 
-  // Accept partner naming too (artisio style)
   const amount = Number(body.amount);
   const currency = String(body.currency || body.currency_code || cfg.currency);
   const orderRef = String(body.orderRef || body.reference || "");
@@ -155,7 +158,6 @@ export async function POST(req: NextRequest) {
   const sessionId = session.sessionId;
 
   // Keep payUrl on the SAME host that created the session
-  // (avoids Unknown sessionId when using in-memory session storage)
   const payUrl = `${reqBaseUrl(req)}/pay/${sessionId}`;
 
   return NextResponse.json(
