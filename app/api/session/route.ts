@@ -7,8 +7,8 @@ import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 
 /**
  * CORS
- * Demo 2 (partner site) lives on demo-store(-staging).edge-lab.uk and calls demo.edge-lab.uk.
- * Browsers will preflight (OPTIONS). Without CORS headers you'll get "TypeError: Load failed".
+ * Demo 2 (partner site) lives on demo-store(-staging).edge-lab.uk
+ * and calls demo.edge-lab.uk from the browser (so needs CORS).
  */
 const ALLOW_ORIGINS = [
   "https://demo-store-staging.edge-lab.uk",
@@ -19,8 +19,6 @@ function corsHeaders(req: NextRequest) {
   const origin = req.headers.get("origin") || "";
   const allowOrigin = ALLOW_ORIGINS.includes(origin) ? origin : "";
 
-  // If origin not allow-listed, we return no allow-origin header.
-  // That means browsers will block it, but server-to-server requests still work.
   const headers: Record<string, string> = {
     "access-control-allow-methods": "GET,POST,OPTIONS",
     "access-control-allow-headers": "content-type",
@@ -28,6 +26,7 @@ function corsHeaders(req: NextRequest) {
     vary: "origin",
   };
 
+  // Only set allow-origin when it's on the allowlist
   if (allowOrigin) headers["access-control-allow-origin"] = allowOrigin;
 
   return headers;
@@ -42,7 +41,7 @@ function resolveTenant(req: NextRequest) {
   const hdr = req.headers.get("x-edge-lab-tenant");
   if (hdr) return hdr;
 
-  // Fallback (local/dev safety)
+  // Fallback
   const host = req.headers.get("host") || "";
   return getSlugFromHost(host);
 }
@@ -155,10 +154,12 @@ export async function POST(req: NextRequest) {
 
   const sessionId = session.sessionId;
 
-  // IMPORTANT:
-  // Keep payUrl on the SAME host that created the session.
-  // With in-memory session storage, switching host = "Unknown sessionId".
+  // Keep payUrl on the SAME host that created the session
+  // (avoids Unknown sessionId when using in-memory session storage)
   const payUrl = `${reqBaseUrl(req)}/pay/${sessionId}`;
 
-  return NextResponse.json({ sessionId, payUrl }, { headers: corsHeaders(req) });
+  return NextResponse.json(
+    { sessionId, payUrl },
+    { headers: corsHeaders(req) }
+  );
 }
