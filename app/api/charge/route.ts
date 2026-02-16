@@ -44,11 +44,18 @@ function resolveTenant(req: NextRequest) {
  */
 function parseNmiResponse(text: string): Record<string, string> {
   const out: Record<string, string> = {};
+
   for (const part of text.split("&")) {
     if (!part) continue;
-    const [k, v = ""] = part.split("=");
+
+    // ✅ split only on the FIRST "="
+    const i = part.indexOf("=");
+    const k = i >= 0 ? part.slice(0, i) : part;
+    const v = i >= 0 ? part.slice(i + 1) : "";
+
     out[decodeURIComponent(k)] = decodeURIComponent(v);
   }
+
   return out;
 }
 
