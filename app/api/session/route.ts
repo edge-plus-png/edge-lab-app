@@ -1,3 +1,4 @@
+// app/api/session/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
@@ -5,8 +6,9 @@ import { createSession, getSession } from "@/lib/store";
 import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 
 /**
- * CORS: only needed for browser calls from demo-store domains.
- * Real partners should call server-to-server (Origin typically blank).
+ * CORS
+ * Demo partner sites live on demo-store(-staging).edge-lab.uk
+ * and call demo.edge-lab.uk from the browser.
  */
 const ALLOW_ORIGINS = new Set([
   "https://demo-store-staging.edge-lab.uk",
@@ -48,9 +50,13 @@ function reqBaseUrl(req: NextRequest) {
 
 function base64urlEncode(obj: unknown) {
   const json = JSON.stringify(obj);
-  // Node runtime -> Buffer exists
-  const b64 = Buffer.from(json).toString("base64");
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+
+  // Node runtime (Vercel) has Buffer
+  return Buffer.from(json)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
 export async function GET(req: NextRequest) {
@@ -75,6 +81,7 @@ export async function GET(req: NextRequest) {
       orderRef: session.orderRef,
       returnUrl: session.returnUrl || "",
       tokenizationKey: cfg.tokenizationKey,
+      customer: session.customer || null,
     },
     { headers: corsHeaders(req) }
   );
@@ -90,6 +97,7 @@ export async function POST(req: NextRequest) {
   const currency = String(body.currency || body.currency_code || cfg.currency);
   const orderRef = String(body.orderRef || body.reference || "");
   const customer = body.customer || {};
+  const returnUrl = body.returnUrl ? String(body.returnUrl) : "";
 
   const max = Number(process.env.EDGE_LAB_MAX_AMOUNT || "50");
 
@@ -109,26 +117,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required customer fields" }, { status: 400, headers: corsHeaders(req) });
   }
 
-  /**
-   * ✅ Return URL logic:
-   * 1) Partner can send it (optional)
-   * 2) Otherwise, we use the onboarding default for that tenant
-   */
-  const requestedReturnUrl = body.returnUrl ? String(body.returnUrl) : "";
-  const effectiveReturnUrl = requestedReturnUrl || cfg.defaultReturnUrl || "";
-
-  // If we have a return URL, validate it (whether partner-supplied or default)
-  if (effectiveReturnUrl) {
+  // Only validate if provided
+  if (returnUrl) {
     try {
-      validateReturnUrlOrThrow(effectiveReturnUrl, cfg.allowedReturnUrlPrefixes);
+      validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
     } catch (e: any) {
-      return NextResponse.json(
-        { error: e?.message || "Invalid returnUrl" },
-        { status: 400, headers: corsHeaders(req) }
-      );
+      return NextResponse.json({ error: e?.message || "Invalid returnUrl" }, { status: 400, headers: corsHeaders(req) });
     }
   }
 
+  // Store server-side session (may not be reliable across regions)
   const session = createSession({
     slug,
     amount,
@@ -140,19 +138,25 @@ export async function POST(req: NextRequest) {
       email: String(customer.email),
       postalCode: String(customer.postalCode),
     },
-    returnUrl: effectiveReturnUrl || undefined,
+    returnUrl: returnUrl || undefined,
   });
 
   const sessionId = session.sessionId;
 
-  // Payload for /pay so the pay page works even without shared storage
+  // ✅ Encode everything Pay page needs (no dependency on GET/session storage)
   const payload = {
     sessionId,
     amount,
     currency,
     orderRef,
-    returnUrl: effectiveReturnUrl || "",
+    returnUrl: returnUrl || "",
     tokenizationKey: cfg.tokenizationKey,
+    customer: {
+      firstName: String(customer.firstName),
+      lastName: String(customer.lastName),
+      email: String(customer.email),
+      postalCode: String(customer.postalCode),
+    },
   };
 
   const p = base64urlEncode(payload);
