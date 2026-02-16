@@ -1,3 +1,4 @@
+// app/pay/[sessionId]/page.tsx
 import PayClient from "./PayClient";
 
 const LAB_RED = "#DC2626";
@@ -22,10 +23,24 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
           </div>
         </div>
 
-        <div style={{ borderRadius: 18, background: "#fff", border: "1px solid #eee", boxShadow: "0 10px 28px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+        <div
+          style={{
+            borderRadius: 18,
+            background: "#fff",
+            border: "1px solid #eee",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
+            overflow: "hidden",
+          }}
+        >
           <div style={{ height: 5, background: LAB_RED }} />
           <div style={{ padding: 22 }}>
-            <PayClient />
+            {!sessionId ? (
+              <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
+                <b>Error:</b> Missing sessionId in URL
+              </div>
+            ) : (
+              <PayClient />
+            )}
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 
 type SessionResponse = {
   sessionId: string;
@@ -12,15 +12,50 @@ type SessionResponse = {
   tokenizationKey: string;
 };
 
+function safeJsonParse<T>(s: string): T | null {
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    return null;
+  }
+}
+
+function decodeP(p: string): SessionResponse | null {
+  try {
+    // base64url -> base64
+    const b64 = p.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(b64);
+    const data = safeJsonParse<SessionResponse>(json);
+    if (!data?.sessionId || !data?.tokenizationKey) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export default function PayClient() {
   const params = useParams<{ sessionId?: string }>();
+  const search = useSearchParams();
+
   const sessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
+  const p = search.get("p") || "";
+
+  const decoded = useMemo(() => (p ? decodeP(p) : null), [p]);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [session, setSession] = useState<SessionResponse | null>(null);
 
   useEffect(() => {
+    // ✅ If we have payload in `p`, we do not need to fetch anything.
+    if (decoded) {
+      setSession(decoded);
+      setErr(null);
+      setLoading(false);
+      return;
+    }
+
+    // Fallback: load from API using URL param
     if (!sessionId) {
       setErr("Missing sessionId in URL");
       setLoading(false);
@@ -54,7 +89,7 @@ export default function PayClient() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, decoded]);
 
   if (loading) return <div style={{ opacity: 0.7 }}>Loading payment session…</div>;
 
