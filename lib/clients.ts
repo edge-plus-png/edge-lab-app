@@ -12,8 +12,8 @@ const CLIENTS: Record<string, ClientConfig> = {
       "http://localhost",
       "http://127.0.0.1",
 
-      // Demo: allow only the built-in webhook sink (same flow as everyone)
-      "https://demo.edge-lab.uk/api/webhook-sink",
+      // ✅ Demo: lock to demo domain (allows /api/webhook-sink?token=... and /webhook-sink?token=...)
+      "https://demo.edge-lab.uk",
     ],
   },
 
