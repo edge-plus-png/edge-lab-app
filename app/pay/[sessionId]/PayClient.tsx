@@ -1,7 +1,7 @@
-// app/pay/[sessionId]/PayClient.tsx
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
 type SessionResponse = {
   sessionId: string;
@@ -12,22 +12,17 @@ type SessionResponse = {
   tokenizationKey: string;
 };
 
-export default function PayClient({
-  sessionId,
-  initialSession,
-}: {
-  sessionId: string;
-  initialSession?: SessionResponse | null;
-}) {
-  const [loading, setLoading] = useState(!initialSession);
+export default function PayClient() {
+  const params = useParams<{ sessionId?: string }>();
+  const sessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
+
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [session, setSession] = useState<SessionResponse | null>(initialSession || null);
+  const [session, setSession] = useState<SessionResponse | null>(null);
 
   useEffect(() => {
-    if (session) return; // already have it from URL payload
-
     if (!sessionId) {
-      setErr("Missing sessionId");
+      setErr("Missing sessionId in URL");
       setLoading(false);
       return;
     }
@@ -39,9 +34,14 @@ export default function PayClient({
       setErr(null);
 
       try {
-        const res = await fetch(`/api/session?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
-        const json = await res.json();
+        const res = await fetch(
+          `/api/session?sessionId=${encodeURIComponent(sessionId)}`,
+          { cache: "no-store" }
+        );
+
+        const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.error || "Failed to load session");
+
         if (!cancelled) setSession(json);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || "Failed to load session");
@@ -54,7 +54,7 @@ export default function PayClient({
     return () => {
       cancelled = true;
     };
-  }, [sessionId, session]);
+  }, [sessionId]);
 
   if (loading) return <div style={{ opacity: 0.7 }}>Loading payment session…</div>;
 
