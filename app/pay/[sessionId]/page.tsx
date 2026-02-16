@@ -1,4 +1,3 @@
-// app/pay/[sessionId]/page.tsx
 import PayClient from "./PayClient";
 
 const LAB_RED = "#DC2626";
@@ -13,8 +12,8 @@ export default function PayPage({ params }: { params: { sessionId?: string } }) 
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 64 }} />
             <div style={{ lineHeight: 1.2 }}>
-              <div style={{ fontWeight: 800, fontSize: 14 }}>Secure Payment Authentication</div>
-              <div style={{ fontSize: 12, opacity: 0.65 }}>3DS is required before charging</div>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>Secure Payment</div>
+              <div style={{ fontSize: 12, opacity: 0.65 }}>Tokenise → charge via gateway</div>
             </div>
           </div>
 

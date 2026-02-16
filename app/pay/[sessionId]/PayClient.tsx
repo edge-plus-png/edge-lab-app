@@ -1,4 +1,3 @@
-// app/pay/[sessionId]/PayClient.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -45,10 +44,11 @@ export default function PayClient() {
   const p = search.get("p") || "";
   const decoded = useMemo(() => (p ? decodeP(p) : null), [p]);
 
-  // For Demo 2: payload is the source of truth.
+  // Demo 2: payload is the source of truth (no shared storage needed)
   const session = decoded;
 
   const [err, setErr] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
 
   if (!session) {
     return (
@@ -73,30 +73,38 @@ export default function PayClient() {
         </div>
       )}
 
+      {okMsg && (
+        <div style={{ padding: 12, marginBottom: 12, background: "#dcfce7", borderRadius: 12, border: "1px solid #bbf7d0" }}>
+          <b>Success:</b> {okMsg}
+        </div>
+      )}
+
       <NmiPayments
         tokenizationKey={session.tokenizationKey}
         layout="multiLine"
         paymentMethods={["card"]}
         onPay={async (event: { token: string }) => {
           setErr(null);
+          setOkMsg(null);
 
           try {
             const res = await fetch("/api/charge", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
-                // Don’t rely on stored sessions in Demo 2
                 sessionId: session.sessionId,
                 orderRef: session.orderRef,
                 amount: session.amount,
                 currency: session.currency,
                 paymentToken: event.token,
-                returnUrl: session.returnUrl || "",
               }),
             });
 
             const json = await res.json().catch(() => ({}));
             if (!res.ok) return json?.error || "Charge failed";
+
+            // show something useful on screen
+            setOkMsg(`${json.status || "approved"} (tx=${json?.gateway?.transaction_id || json?.nmi?.transactionid || "n/a"})`);
 
             // Returning true tells the component “success”
             return true;
@@ -107,7 +115,7 @@ export default function PayClient() {
       />
 
       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-        Token is created in-browser by the Payment Component, then posted server-to-server for processing.  [oai_citation:3‡Payment component 022026.docx](sediment://file_000000007de8720e8aadad2a462fc28c)
+        Payment token is created in-browser by the NMI component, then posted server-to-server for processing.
       </div>
     </div>
   );
