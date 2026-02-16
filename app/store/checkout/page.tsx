@@ -78,6 +78,14 @@ export default function CheckoutPage() {
     }
   }
 
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // ignore
+    }
+  }
+
   return (
     <main style={{ maxWidth: 980, margin: "34px auto", fontFamily: "system-ui", padding: "0 18px" }}>
       {/* Header */}
@@ -99,7 +107,7 @@ export default function CheckoutPage() {
 
       {err && (
         <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca", marginBottom: 12 }}>
-          <b>Error:</b> {err}
+          <b>Notice:</b> {err}
         </div>
       )}
 
@@ -131,23 +139,41 @@ export default function CheckoutPage() {
             <h3 style={{ marginTop: 18 }}>Return URL (webhook receiver)</h3>
 
             <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 8 }}>
-              This URL is supplied during onboarding and allow-listed for security. After payment, edge-lab will POST the final
-              result here automatically.
+              This URL is supplied during onboarding and allow-listed for security. After payment, edge-lab will POST the final result here automatically.
             </div>
 
-            <input
-              style={{ ...inputStyle(), background: "#f6f6f6", cursor: "not-allowed" }}
-              value={returnUrl}
-              readOnly
-            />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                style={{ ...inputStyle(), marginBottom: 0, background: "#f6f6f6" }}
+                value={returnUrl}
+                readOnly
+              />
+              <button
+                type="button"
+                onClick={() => copy(returnUrl)}
+                disabled={!returnUrl}
+                style={{
+                  padding: "12px 12px",
+                  borderRadius: 12,
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                  cursor: returnUrl ? "pointer" : "not-allowed",
+                  opacity: returnUrl ? 1 : 0.6,
+                  fontWeight: 800,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Copy
+              </button>
+            </div>
 
             {sinkViewerUrl && (
-              <div style={{ marginTop: 6 }}>
+              <div style={{ marginTop: 8 }}>
                 <a
                   href={sinkViewerUrl}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ fontSize: 12, fontWeight: 700, color: LAB_RED, textDecoration: "none" }}
+                  style={{ fontSize: 12, fontWeight: 800, color: LAB_RED, textDecoration: "none" }}
                 >
                   View received webhook →
                 </a>
