@@ -49,6 +49,7 @@ function decodeP(p: string): SessionResponse | null {
   try {
     let b64 = p.replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4) b64 += "=";
+
     const json = atob(b64);
     const data = safeJsonParse<SessionResponse>(json);
     if (!data?.sessionId || !data?.tokenizationKey) return null;
@@ -62,14 +63,20 @@ export default function PayClient() {
   const params = useParams<{ sessionId?: string }>();
   const search = useSearchParams();
 
-  const urlSessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
+  const urlSessionId =
+    typeof params?.sessionId === "string" ? params.sessionId : "";
   const p = search.get("p") || "";
   const session = useMemo(() => (p ? decodeP(p) : null), [p]);
 
   const threeDSRef = useRef<NmiThreeDSecureRef>(null);
 
   const [err, setErr] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
+
+  // status banner
+  const [status, setStatus] = useState<"approved" | "declined" | "error" | null>(
+    null
+  );
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   const [isValid, setIsValid] = useState(false);
   const [paymentToken, setPaymentToken] = useState<string>("");
@@ -79,8 +86,16 @@ export default function PayClient() {
 
   if (!session) {
     return (
-      <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
-        <b>Error:</b> Missing or invalid payload. (Expected <code>?p=...</code> in URL)
+      <div
+        style={{
+          padding: 12,
+          background: "#fee2e2",
+          borderRadius: 12,
+          border: "1px solid #fecaca",
+        }}
+      >
+        <b>Error:</b> Missing or invalid payload. (Expected <code>?p=...</code>{" "}
+        in URL)
         <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
           URL sessionId: <b>{urlSessionId || "—"}</b>
         </div>
@@ -99,7 +114,8 @@ export default function PayClient() {
 
   async function submitCharge(threeDS: ThreeDSCompleteEvent) {
     setErr(null);
-    setOkMsg(null);
+    setStatus(null);
+    setStatusMsg(null);
     setIsBusy(true);
 
     try {
@@ -139,13 +155,23 @@ export default function PayClient() {
         return;
       }
 
-      // success UI
+      const st: "approved" | "declined" | "error" =
+        json?.status === "approved"
+          ? "approved"
+          : json?.status === "declined"
+          ? "declined"
+          : "error";
+
       const tx = json?.gateway?.transaction_id || json?.nmi?.transactionid || "n/a";
       const eciOut = json?.gateway?.eci || "—";
-      setOkMsg(`${json.status || "approved"} (tx=${tx}, eci=${eciOut})`);
+
+      setStatus(st);
+      setStatusMsg(`${st} (tx=${tx}, eci=${eciOut})`);
+
+      // If you only want to hide card fields on APPROVED, change to: if (st === "approved") setIsDone(true)
       setIsDone(true);
 
-      // optional: clear token once done
+      // Clear token after completion (safe)
       setPaymentToken("");
       setIsValid(false);
     } catch (e: any) {
@@ -157,13 +183,15 @@ export default function PayClient() {
 
   function start3DS() {
     setErr(null);
-    setOkMsg(null);
+    setStatus(null);
+    setStatusMsg(null);
 
     if (!isValid || !paymentToken) {
       setErr("Payment details incomplete");
       return;
     }
 
+    // start overlay as soon as 3DS begins
     setIsBusy(true);
 
     threeDSRef.current?.startThreeDSecure({
@@ -180,24 +208,39 @@ export default function PayClient() {
     } as any);
   }
 
+  const showSuccess = status === "approved" && statusMsg;
+  const showFailure = (status === "declined" || status === "error") && statusMsg;
+
   return (
     <div style={{ position: "relative" }}>
-      {/* Busy overlay (spinner) */}
+      {/* Busy overlay (full-card, blocks interactions) */}
       {isBusy && (
         <div
           style={{
             position: "absolute",
             inset: 0,
-            background: "rgba(255,255,255,0.75)",
+            background: "rgba(255,255,255,0.78)",
             backdropFilter: "blur(2px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 10,
+            zIndex: 50,
             borderRadius: 12,
           }}
         >
-          <div style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 700 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              fontWeight: 800,
+              padding: "12px 14px",
+              borderRadius: 12,
+              background: "#fff",
+              border: "1px solid #eee",
+              boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
+            }}
+          >
             <div
               style={{
                 width: 18,
@@ -222,14 +265,44 @@ export default function PayClient() {
       </div>
 
       {err && (
-        <div style={{ padding: 12, marginBottom: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
+        <div
+          style={{
+            padding: 12,
+            marginBottom: 12,
+            background: "#fee2e2",
+            borderRadius: 12,
+            border: "1px solid #fecaca",
+          }}
+        >
           <b>Error:</b> {err}
         </div>
       )}
 
-      {okMsg && (
-        <div style={{ padding: 12, marginBottom: 12, background: "#dcfce7", borderRadius: 12, border: "1px solid #bbf7d0" }}>
-          <b>Success:</b> {okMsg}
+      {showSuccess && (
+        <div
+          style={{
+            padding: 12,
+            marginBottom: 12,
+            background: "#dcfce7",
+            borderRadius: 12,
+            border: "1px solid #bbf7d0",
+          }}
+        >
+          <b>Success:</b> {statusMsg}
+        </div>
+      )}
+
+      {showFailure && (
+        <div
+          style={{
+            padding: 12,
+            marginBottom: 12,
+            background: "#fee2e2",
+            borderRadius: 12,
+            border: "1px solid #fecaca",
+          }}
+        >
+          <b>Error:</b> {statusMsg}
         </div>
       )}
 
@@ -255,7 +328,7 @@ export default function PayClient() {
               setErr(e?.message || "3DS authentication failed");
             }}
             onComplete={(result: any) => {
-              // 3DS finished; now charge
+              // 3DS done; charge next (submitCharge manages busy true/false too)
               submitCharge(result as ThreeDSCompleteEvent);
             }}
           />
