@@ -1,7 +1,8 @@
+// app/pay/[sessionId]/PayClient.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 type SessionResponse = {
   sessionId: string;
@@ -33,11 +34,8 @@ function decodeP(p: string): SessionResponse | null {
   }
 }
 
-export default function PayClient() {
-  const params = useParams<{ sessionId?: string }>();
+export default function PayClient({ sessionId }: { sessionId: string }) {
   const search = useSearchParams();
-
-  const sessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
   const p = search.get("p") || "";
 
   const decoded = useMemo(() => (p ? decodeP(p) : null), [p]);
@@ -47,7 +45,7 @@ export default function PayClient() {
   const [session, setSession] = useState<SessionResponse | null>(null);
 
   useEffect(() => {
-    // ✅ If we have payload in `p`, we do not need to fetch anything.
+    // ✅ If we have payload in `p`, no need to fetch anything (works without shared storage).
     if (decoded) {
       setSession(decoded);
       setErr(null);
@@ -55,7 +53,7 @@ export default function PayClient() {
       return;
     }
 
-    // Fallback: load from API using URL param
+    // Fallback to API
     if (!sessionId) {
       setErr("Missing sessionId in URL");
       setLoading(false);
@@ -69,14 +67,11 @@ export default function PayClient() {
       setErr(null);
 
       try {
-        const res = await fetch(
-          `/api/session?sessionId=${encodeURIComponent(sessionId)}`,
-          { cache: "no-store" }
-        );
-
+        const res = await fetch(`/api/session?sessionId=${encodeURIComponent(sessionId)}`, {
+          cache: "no-store",
+        });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.error || "Failed to load session");
-
         if (!cancelled) setSession(json);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || "Failed to load session");

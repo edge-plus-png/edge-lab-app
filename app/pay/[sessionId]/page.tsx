@@ -23,15 +23,7 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
           </div>
         </div>
 
-        <div
-          style={{
-            borderRadius: 18,
-            background: "#fff",
-            border: "1px solid #eee",
-            boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
-            overflow: "hidden",
-          }}
-        >
+        <div style={{ borderRadius: 18, background: "#fff", border: "1px solid #eee", boxShadow: "0 10px 28px rgba(0,0,0,0.06)", overflow: "hidden" }}>
           <div style={{ height: 5, background: LAB_RED }} />
           <div style={{ padding: 22 }}>
             {!sessionId ? (
@@ -39,7 +31,7 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
                 <b>Error:</b> Missing sessionId in URL
               </div>
             ) : (
-              <PayClient />
+              <PayClient sessionId={sessionId} />
             )}
           </div>
         </div>
