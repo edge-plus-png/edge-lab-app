@@ -15,10 +15,11 @@ function resolveTenant(req: NextRequest) {
   return getSlugFromHost(host);
 }
 
-function tenantBaseUrl(slug: string) {
-  // Keeps payUrl stable even when caller is a special domain like demo-store-staging.edge-lab.uk
-  // Adjust if you ever change your base domain.
-  return `https://${slug}.edge-lab.uk`;
+function reqBaseUrl(req: NextRequest) {
+  const host = req.headers.get("host") || "";
+  // If you ever terminate TLS elsewhere and forward proto, you can enhance this,
+  // but for your edge-lab domains https is correct.
+  return `https://${host}`;
 }
 
 export async function GET(req: NextRequest) {
@@ -65,22 +66,39 @@ export async function POST(req: NextRequest) {
   }
 
   if (amount > max) {
-    return NextResponse.json({ error: `Amount exceeds lab limit (£${max}).` }, { status: 400 });
+    return NextResponse.json(
+      { error: `Amount exceeds lab limit (£${max}).` },
+      { status: 400 }
+    );
   }
 
   if (!orderRef) {
-    return NextResponse.json({ error: "Missing orderRef/reference" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing orderRef/reference" },
+      { status: 400 }
+    );
   }
 
-  if (!customer.firstName || !customer.lastName || !customer.email || !customer.postalCode) {
-    return NextResponse.json({ error: "Missing required customer fields" }, { status: 400 });
+  if (
+    !customer.firstName ||
+    !customer.lastName ||
+    !customer.email ||
+    !customer.postalCode
+  ) {
+    return NextResponse.json(
+      { error: "Missing required customer fields" },
+      { status: 400 }
+    );
   }
 
   if (returnUrl) {
     try {
       validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
     } catch (e: any) {
-      return NextResponse.json({ error: e?.message || "Invalid returnUrl" }, { status: 400 });
+      return NextResponse.json(
+        { error: e?.message || "Invalid returnUrl" },
+        { status: 400 }
+      );
     }
   }
 
@@ -100,8 +118,9 @@ export async function POST(req: NextRequest) {
 
   const sessionId = session.sessionId;
 
-  // IMPORTANT: send user to the tenant hosted payment page (not the store-staging host)
-  const payUrl = `${tenantBaseUrl(slug)}/pay/${sessionId}`;
+  // ✅ IMPORTANT: keep payUrl on the SAME host that created the session
+  // This avoids "Unknown sessionId" with in-memory session storage.
+  const payUrl = `${reqBaseUrl(req)}/pay/${sessionId}`;
 
   return NextResponse.json({ sessionId, payUrl });
 }
