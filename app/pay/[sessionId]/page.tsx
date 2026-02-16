@@ -3,47 +3,35 @@ import PayClient from "./PayClient";
 
 const LAB_RED = "#DC2626";
 
-type Params = { sessionId?: string };
+function decodePayload(p?: string) {
+  if (!p) return null;
+  try {
+    const json = Buffer.from(p, "base64url").toString("utf8");
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
 
-export default async function PayPage({
+export default function PayPage({
   params,
+  searchParams,
 }: {
-  params: Params | Promise<Params>;
+  params: { sessionId: string };
+  searchParams?: { p?: string };
 }) {
-  // ✅ Next 16 safe: params may be async depending on build/runtime
-  const resolved = await Promise.resolve(params);
-  const sessionId = resolved?.sessionId;
+  const sessionId = params?.sessionId || "";
+  const initialSession = decodePayload(searchParams?.p);
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#fafafa",
-        fontFamily: "system-ui",
-        padding: "34px 16px",
-      }}
-    >
+    <main style={{ minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui", padding: "34px 16px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            marginBottom: 18,
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 64 }} />
-
             <div style={{ lineHeight: 1.2 }}>
-              <div style={{ fontWeight: 800, fontSize: 14 }}>
-                Secure Payment Authentication
-              </div>
-              <div style={{ fontSize: 12, opacity: 0.65 }}>
-                3DS is required before charging
-              </div>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>Secure Payment Authentication</div>
+              <div style={{ fontSize: 12, opacity: 0.65 }}>3DS is required before charging</div>
             </div>
           </div>
 
@@ -52,31 +40,15 @@ export default async function PayPage({
           </div>
         </div>
 
-        {/* Card */}
-        <div
-          style={{
-            borderRadius: 18,
-            background: "#fff",
-            border: "1px solid #eee",
-            boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
-            overflow: "hidden",
-          }}
-        >
+        <div style={{ borderRadius: 18, background: "#fff", border: "1px solid #eee", boxShadow: "0 10px 28px rgba(0,0,0,0.06)", overflow: "hidden" }}>
           <div style={{ height: 5, background: LAB_RED }} />
           <div style={{ padding: 22 }}>
             {!sessionId ? (
-              <div
-                style={{
-                  padding: 12,
-                  background: "#fee2e2",
-                  borderRadius: 12,
-                  border: "1px solid #fecaca",
-                }}
-              >
-                <b>Error:</b> Missing sessionId route param
+              <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
+                <b>Error:</b> Missing sessionId in URL
               </div>
             ) : (
-              <PayClient sessionId={sessionId} />
+              <PayClient sessionId={sessionId} initialSession={initialSession} />
             )}
           </div>
         </div>

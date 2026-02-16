@@ -12,12 +12,20 @@ type SessionResponse = {
   tokenizationKey: string;
 };
 
-export default function PayClient({ sessionId }: { sessionId: string }) {
-  const [loading, setLoading] = useState(true);
+export default function PayClient({
+  sessionId,
+  initialSession,
+}: {
+  sessionId: string;
+  initialSession?: SessionResponse | null;
+}) {
+  const [loading, setLoading] = useState(!initialSession);
   const [err, setErr] = useState<string | null>(null);
-  const [session, setSession] = useState<SessionResponse | null>(null);
+  const [session, setSession] = useState<SessionResponse | null>(initialSession || null);
 
   useEffect(() => {
+    if (session) return; // already have it from URL payload
+
     if (!sessionId) {
       setErr("Missing sessionId");
       setLoading(false);
@@ -31,12 +39,8 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
       setErr(null);
 
       try {
-        const res = await fetch(
-          `/api/session?sessionId=${encodeURIComponent(sessionId)}`,
-          { cache: "no-store" }
-        );
+        const res = await fetch(`/api/session?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
         const json = await res.json();
-
         if (!res.ok) throw new Error(json?.error || "Failed to load session");
         if (!cancelled) setSession(json);
       } catch (e: any) {
@@ -50,7 +54,7 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, session]);
 
   if (loading) return <div style={{ opacity: 0.7 }}>Loading payment session…</div>;
 

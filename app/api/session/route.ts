@@ -9,6 +9,10 @@ import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
  * CORS
  * Demo partner sites live on demo-store(-staging).edge-lab.uk
  * and call demo.edge-lab.uk from the browser.
+ *
+ * IMPORTANT:
+ * - For real partners (e.g. anytime.edge-lab.uk) they should call server-to-server,
+ *   so Origin is typically blank and CORS doesn't apply.
  */
 const ALLOW_ORIGINS = new Set([
   "https://demo-store-staging.edge-lab.uk",
@@ -17,9 +21,6 @@ const ALLOW_ORIGINS = new Set([
 
 function corsHeaders(req: NextRequest) {
   const origin = req.headers.get("origin") || "";
-
-  // If origin is one of our demo stores, echo it back (best practice).
-  // If origin is missing (server-to-server / some tools), allow it.
   const allowOrigin = ALLOW_ORIGINS.has(origin) ? origin : "";
 
   const headers: Record<string, string> = {
@@ -31,9 +32,8 @@ function corsHeaders(req: NextRequest) {
     "x-edge-origin": origin,
   };
 
-  if (allowOrigin) {
-    headers["access-control-allow-origin"] = allowOrigin;
-  }
+  // Only set allow-origin when it's on the allowlist
+  if (allowOrigin) headers["access-control-allow-origin"] = allowOrigin;
 
   return headers;
 }
@@ -53,6 +53,25 @@ function resolveTenant(req: NextRequest) {
 function reqBaseUrl(req: NextRequest) {
   const host = req.headers.get("host") || "";
   return `https://${host}`;
+}
+
+function base64urlEncode(obj: unknown) {
+  // Node 18+ supports base64url; fallback included just in case.
+  const json = JSON.stringify(obj);
+  // @ts-ignore
+  if (typeof Buffer !== "undefined") {
+    try {
+      return Buffer.from(json).toString("base64url");
+    } catch {
+      // fallback below
+    }
+    return Buffer.from(json)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+  }
+  throw new Error("Buffer not available for base64 encoding");
 }
 
 export async function GET(req: NextRequest) {
@@ -94,6 +113,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
 
+  // Accept partner naming too (reference / currency_code)
   const amount = Number(body.amount);
   const currency = String(body.currency || body.currency_code || cfg.currency);
   const orderRef = String(body.orderRef || body.reference || "");
@@ -123,13 +143,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!customer.firstName || !customer.lastName || !customer.email || !customer.postalCode) {
+  if (
+    !customer.firstName ||
+    !customer.lastName ||
+    !customer.email ||
+    !customer.postalCode
+  ) {
     return NextResponse.json(
       { error: "Missing required customer fields" },
       { status: 400, headers: corsHeaders(req) }
     );
   }
 
+  // Optional: only validate if provided (partners usually provide once during onboarding)
   if (returnUrl) {
     try {
       validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
@@ -141,6 +167,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Create a server-side session (still useful for internal flow),
+  // but we ALSO pass payload to /pay via ?p=... so the pay page
+  // doesn't depend on in-memory session storage.
   const session = createSession({
     slug,
     amount,
@@ -157,8 +186,20 @@ export async function POST(req: NextRequest) {
 
   const sessionId = session.sessionId;
 
-  // Keep payUrl on the SAME host that created the session
-  const payUrl = `${reqBaseUrl(req)}/pay/${sessionId}`;
+  // Payload for the hosted pay page (so it can render without a GET roundtrip)
+  const payload = {
+    sessionId,
+    amount,
+    currency,
+    orderRef,
+    returnUrl: returnUrl || "",
+    tokenizationKey: cfg.tokenizationKey,
+  };
+
+  const p = base64urlEncode(payload);
+
+  // Hosted payUrl lives on the same host that received /api/session
+  const payUrl = `${reqBaseUrl(req)}/pay/${sessionId}?p=${encodeURIComponent(p)}`;
 
   return NextResponse.json(
     { sessionId, payUrl },
