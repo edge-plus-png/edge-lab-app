@@ -47,6 +47,7 @@ function safeJsonParse<T>(s: string): T | null {
 
 function decodeP(p: string): SessionResponse | null {
   try {
+    // base64url -> base64 (+ padding)
     let b64 = p.replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4) b64 += "=";
 
@@ -64,7 +65,8 @@ export default function PayClient() {
   const params = useParams<{ sessionId?: string }>();
   const search = useSearchParams();
 
-  const urlSessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
+  const urlSessionId =
+    typeof params?.sessionId === "string" ? params.sessionId : "";
   const p = search.get("p") || "";
   const session = useMemo(() => (p ? decodeP(p) : null), [p]);
 
@@ -80,8 +82,16 @@ export default function PayClient() {
 
   if (!session) {
     return (
-      <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
-        <b>Error:</b> Missing or invalid payload. (Expected <code>?p=...</code> in URL)
+      <div
+        style={{
+          padding: 12,
+          background: "#fee2e2",
+          borderRadius: 12,
+          border: "1px solid #fecaca",
+        }}
+      >
+        <b>Error:</b> Missing or invalid payload. (Expected <code>?p=...</code>{" "}
+        in URL)
         <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
           URL sessionId: <b>{urlSessionId || "—"}</b>
         </div>
@@ -141,7 +151,9 @@ export default function PayClient() {
       }
 
       setOkMsg(
-        `${json.status || "approved"} (tx=${json?.gateway?.transaction_id || "n/a"}, eci=${json?.gateway?.eci || "—"})`
+        `${json.status || "approved"} (tx=${
+          json?.gateway?.transaction_id || "n/a"
+        }, eci=${json?.gateway?.eci || "—"})`
       );
     } catch (e: any) {
       setErr(e?.message || "Charge failed");
@@ -158,6 +170,9 @@ export default function PayClient() {
       setErr("Payment details incomplete");
       return;
     }
+
+    // ✅ start spinner immediately (covers the 3DS modal time)
+    setIsBusy(true);
 
     threeDSRef.current?.startThreeDSecure({
       paymentToken,
@@ -180,13 +195,29 @@ export default function PayClient() {
       </div>
 
       {err && (
-        <div style={{ padding: 12, marginBottom: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
+        <div
+          style={{
+            padding: 12,
+            marginBottom: 12,
+            background: "#fee2e2",
+            borderRadius: 12,
+            border: "1px solid #fecaca",
+          }}
+        >
           <b>Error:</b> {err}
         </div>
       )}
 
       {okMsg && (
-        <div style={{ padding: 12, marginBottom: 12, background: "#dcfce7", borderRadius: 12, border: "1px solid #bbf7d0" }}>
+        <div
+          style={{
+            padding: 12,
+            marginBottom: 12,
+            background: "#dcfce7",
+            borderRadius: 12,
+            border: "1px solid #bbf7d0",
+          }}
+        >
           <b>Success:</b> {okMsg}
         </div>
       )}
@@ -206,9 +237,12 @@ export default function PayClient() {
         tokenizationKey={s.tokenizationKey}
         modal={true}
         onFailure={(e: any) => {
+          // ✅ stop spinner on 3DS failure
+          setIsBusy(false);
           setErr(e?.message || "3DS authentication failed");
         }}
         onComplete={(result: any) => {
+          // submitCharge keeps spinner on and will stop it in finally
           submitCharge(result as ThreeDSCompleteEvent);
         }}
       />
