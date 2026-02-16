@@ -1,14 +1,18 @@
+// lib/types.ts
 export type ClientConfig = {
   slug: string;
   name: string;
   currency: string;
 
-  // Public key used by NMI Payment Component (frontend only)
+  // Public (used by browser pay page)
   tokenizationKey: string;
 
-  // Name of ENV variable holding the NMI private key (server-side only)
-  privateKeyEnv?: string;
+  // Private (used server-side for /api/charge)
+  privateKeyEnv: string;
 
-  // Allowed return URL prefixes (security control)
+  // Security allow-list for return URLs
   allowedReturnUrlPrefixes: string[];
+
+  // ✅ Optional: onboarding default return URL for this tenant
+  defaultReturnUrl?: string;
 };

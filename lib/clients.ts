@@ -11,10 +11,10 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
-
-      // ✅ Demo: lock to demo domain (allows /api/webhook-sink?token=... and /webhook-sink?token=...)
       "https://demo.edge-lab.uk",
     ],
+    // ✅ optional default (use your sink in demo, or leave empty)
+    defaultReturnUrl: "https://demo.edge-lab.uk/api/webhook-sink",
   },
 
   anytime: {
@@ -29,6 +29,8 @@ const CLIENTS: Record<string, ClientConfig> = {
       "https://staging.anytimebooking.com",
       "https://anytimebooking.com",
     ],
+    // ✅ set this to Anytime’s real webhook endpoint (their staging/production)
+    // defaultReturnUrl: "https://staging.anytimebooking.com/api/edge/webhook",
   },
 
   nuco: {
@@ -43,6 +45,7 @@ const CLIENTS: Record<string, ClientConfig> = {
       "https://nucotraining.com",
       "https://www.nucotraining.com",
     ],
+    // defaultReturnUrl: "https://nucotraining.com/api/edge/webhook",
   },
 
   artisio: {
@@ -57,6 +60,7 @@ const CLIENTS: Record<string, ClientConfig> = {
       "https://artisio.co",
       "https://www.artisio.co",
     ],
+    // defaultReturnUrl: "https://artisio.co/api/edge/webhook",
   },
 };
 
