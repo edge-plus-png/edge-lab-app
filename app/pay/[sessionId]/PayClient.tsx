@@ -24,10 +24,18 @@ function safeJsonParse<T>(s: string): T | null {
 function decodeP(p: string): SessionResponse | null {
   try {
     // base64url -> base64
-    const b64 = p.replace(/-/g, "+").replace(/_/g, "/");
+    let b64 = p.replace(/-/g, "+").replace(/_/g, "/");
+
+    // ✅ add padding (THIS is what was missing)
+    while (b64.length % 4) {
+      b64 += "=";
+    }
+
     const json = atob(b64);
     const data = safeJsonParse<SessionResponse>(json);
+
     if (!data?.sessionId || !data?.tokenizationKey) return null;
+
     return data;
   } catch {
     return null;
