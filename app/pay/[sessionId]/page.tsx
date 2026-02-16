@@ -7,25 +7,9 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
   const sessionId = params?.sessionId || "";
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#fafafa",
-        fontFamily: "system-ui",
-        padding: "34px 16px",
-      }}
-    >
+    <main style={{ minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui", padding: "34px 16px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            marginBottom: 18,
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 64 }} />
             <div style={{ lineHeight: 1.2 }}>
@@ -39,19 +23,10 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
           </div>
         </div>
 
-        {/* Card */}
-        <div
-          style={{
-            borderRadius: 18,
-            background: "#fff",
-            border: "1px solid #eee",
-            boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
-            overflow: "hidden",
-          }}
-        >
+        <div style={{ borderRadius: 18, background: "#fff", border: "1px solid #eee", boxShadow: "0 10px 28px rgba(0,0,0,0.06)", overflow: "hidden" }}>
           <div style={{ height: 5, background: LAB_RED }} />
           <div style={{ padding: 22 }}>
-            <PayClient sessionId={sessionId} />
+            <PayClient />
           </div>
         </div>
 
