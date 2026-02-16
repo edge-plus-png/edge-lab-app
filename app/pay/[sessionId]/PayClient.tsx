@@ -65,9 +65,10 @@ export default function PayClient() {
   const params = useParams<{ sessionId?: string }>();
   const search = useSearchParams();
 
-  const urlSessionId =
-    typeof params?.sessionId === "string" ? params.sessionId : "";
+  const urlSessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
   const p = search.get("p") || "";
+
+  // Demo 2: payload is source of truth
   const session = useMemo(() => (p ? decodeP(p) : null), [p]);
 
   const threeDSRef = useRef<NmiThreeDSecureRef>(null);
@@ -75,23 +76,18 @@ export default function PayClient() {
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
+  const [fieldsReady, setFieldsReady] = useState(false);
+
   const [isValid, setIsValid] = useState(false);
   const [paymentToken, setPaymentToken] = useState<string>("");
 
   const [isBusy, setIsBusy] = useState(false);
 
+  // --- Hard stop if payload missing ---
   if (!session) {
     return (
-      <div
-        style={{
-          padding: 12,
-          background: "#fee2e2",
-          borderRadius: 12,
-          border: "1px solid #fecaca",
-        }}
-      >
-        <b>Error:</b> Missing or invalid payload. (Expected <code>?p=...</code>{" "}
-        in URL)
+      <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
+        <b>Error:</b> Missing or invalid payload. (Expected <code>?p=...</code> in URL)
         <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
           URL sessionId: <b>{urlSessionId || "—"}</b>
         </div>
@@ -99,7 +95,7 @@ export default function PayClient() {
     );
   }
 
-  // ✅ IMPORTANT: capture non-null session for TS (and use s everywhere below)
+  // TS-safe alias
   const s = session;
 
   const customer = s.customer || {};
@@ -124,6 +120,7 @@ export default function PayClient() {
           currency: s.currency,
           paymentToken,
 
+          // Pass customer so NMI shows it (and so you can fall back if session store is empty)
           customer: {
             firstName,
             lastName,
@@ -134,6 +131,7 @@ export default function PayClient() {
             country: customer.country || "",
           },
 
+          // 3DS bridge to backend
           cardHolderAuth: threeDS.cardHolderAuth,
           cavv: threeDS.cavv,
           directoryServerId: threeDS.directoryServerId,
@@ -150,11 +148,12 @@ export default function PayClient() {
         return;
       }
 
-      setOkMsg(
-        `${json.status || "approved"} (tx=${
-          json?.gateway?.transaction_id || "n/a"
-        }, eci=${json?.gateway?.eci || "—"})`
-      );
+      // Only show green success if approved
+      if (json?.status === "approved") {
+        setOkMsg(`approved (tx=${json?.gateway?.transaction_id || "n/a"}, eci=${json?.gateway?.eci || "—"})`);
+      } else {
+        setErr(`${json?.status || "error"} (tx=${json?.gateway?.transaction_id || "n/a"})`);
+      }
     } catch (e: any) {
       setErr(e?.message || "Charge failed");
     } finally {
@@ -171,9 +170,7 @@ export default function PayClient() {
       return;
     }
 
-    // ✅ start spinner immediately (covers the 3DS modal time)
-    setIsBusy(true);
-
+    // Trigger payer auth (3DS) — then onComplete → submitCharge()
     threeDSRef.current?.startThreeDSecure({
       paymentToken,
       currency: s.currency,
@@ -195,30 +192,21 @@ export default function PayClient() {
       </div>
 
       {err && (
-        <div
-          style={{
-            padding: 12,
-            marginBottom: 12,
-            background: "#fee2e2",
-            borderRadius: 12,
-            border: "1px solid #fecaca",
-          }}
-        >
+        <div style={{ padding: 12, marginBottom: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
           <b>Error:</b> {err}
         </div>
       )}
 
       {okMsg && (
-        <div
-          style={{
-            padding: 12,
-            marginBottom: 12,
-            background: "#dcfce7",
-            borderRadius: 12,
-            border: "1px solid #bbf7d0",
-          }}
-        >
+        <div style={{ padding: 12, marginBottom: 12, background: "#dcfce7", borderRadius: 12, border: "1px solid #bbf7d0" }}>
           <b>Success:</b> {okMsg}
+        </div>
+      )}
+
+      {/* Simple “spinner” while fields initialise */}
+      {!fieldsReady && (
+        <div style={{ padding: 12, marginBottom: 12, borderRadius: 12, background: "#f3f4f6", border: "1px solid #e5e7eb" }}>
+          Loading secure payment fields…
         </div>
       )}
 
@@ -226,6 +214,7 @@ export default function PayClient() {
         tokenizationKey={s.tokenizationKey}
         layout="multiLine"
         paymentMethods={["card"]}
+        onFieldsAvailable={() => setFieldsReady(true)} // doc mentions this hook  [oai_citation:1‡Payment component 022026.docx](sediment://file_000000007de8720e8aadad2a462fc28c)
         onChange={(data: any) => {
           setIsValid(!!data?.complete);
           if (data?.complete && data?.token) setPaymentToken(String(data.token));
@@ -237,13 +226,16 @@ export default function PayClient() {
         tokenizationKey={s.tokenizationKey}
         modal={true}
         onFailure={(e: any) => {
-          // ✅ stop spinner on 3DS failure
           setIsBusy(false);
           setErr(e?.message || "3DS authentication failed");
         }}
         onComplete={(result: any) => {
-          // submitCharge keeps spinner on and will stop it in finally
+          // result includes: cavv/eci/threeDsVersion etc
           submitCharge(result as ThreeDSCompleteEvent);
+        }}
+        onChallenge={() => {
+          // Optional: mark busy when challenge starts
+          setIsBusy(true);
         }}
       />
 
@@ -266,6 +258,10 @@ export default function PayClient() {
       >
         {isBusy ? "Processing…" : "Pay with 3D Secure"}
       </button>
+
+      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
+        Token is created in-browser by the NMI Payment Component, then posted server-to-server for processing.  [oai_citation:2‡Payment component 022026.docx](sediment://file_000000007de8720e8aadad2a462fc28c)
+      </div>
     </div>
   );
 }
