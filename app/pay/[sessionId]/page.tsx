@@ -7,9 +7,25 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
   const sessionId = params?.sessionId || "";
 
   return (
-    <main style={{ minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui", padding: "34px 16px" }}>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#fafafa",
+        fontFamily: "system-ui",
+        padding: "34px 16px",
+      }}
+    >
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 18,
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <img src="/edge-lab-logo.png" alt="edge lab" style={{ height: 64 }} />
             <div style={{ lineHeight: 1.2 }}>
@@ -23,6 +39,7 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
           </div>
         </div>
 
+        {/* Card */}
         <div
           style={{
             borderRadius: 18,
@@ -34,13 +51,7 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
         >
           <div style={{ height: 5, background: LAB_RED }} />
           <div style={{ padding: 22 }}>
-            {!sessionId ? (
-              <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
-                <b>Error:</b> Missing sessionId in URL
-              </div>
-            ) : (
-              <PayClient sessionId={sessionId} />
-            )}
+            <PayClient sessionId={sessionId} />
           </div>
         </div>
 

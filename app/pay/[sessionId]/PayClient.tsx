@@ -1,7 +1,11 @@
+// app/pay/[sessionId]/PayClient.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+
+// ✅ NMI Payment Component
+import { NmiPayments /*, NmiThreeDSecure */ } from "@nmipayments/nmi-pay-react";
 
 type SessionResponse = {
   sessionId: string;
@@ -10,15 +14,6 @@ type SessionResponse = {
   orderRef: string;
   returnUrl: string;
   tokenizationKey: string;
-};
-
-type ThreeDSFields = {
-  cardHolderAuth?: string;
-  cavv?: string;
-  directoryServerId?: string;
-  eci?: string;
-  threeDsVersion?: string;
-  xid?: string;
 };
 
 function safeJsonParse<T>(s: string): T | null {
@@ -33,11 +28,10 @@ function decodeP(p: string): SessionResponse | null {
   try {
     // base64url -> base64
     let b64 = p.replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4) b64 += "="; // ✅ padding is required
+    while (b64.length % 4) b64 += "="; // ✅ IMPORTANT padding
 
     const json = atob(b64);
     const data = safeJsonParse<SessionResponse>(json);
-
     if (!data?.sessionId || !data?.tokenizationKey) return null;
     return data;
   } catch {
@@ -48,114 +42,59 @@ function decodeP(p: string): SessionResponse | null {
 export default function PayClient({ sessionId }: { sessionId: string }) {
   const search = useSearchParams();
   const p = search.get("p") || "";
+
+  // ✅ If `p` exists, use it (no server fetch required)
   const decoded = useMemo(() => (p ? decodeP(p) : null), [p]);
 
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [session, setSession] = useState<SessionResponse | null>(null);
 
-  const [busy, setBusy] = useState(false);
-
-  // This is where the payment component can mount into the DOM.
-  const mountRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
+    // Use payload in URL if present (most reliable on Vercel)
     if (decoded) {
       setSession(decoded);
       setErr(null);
+      setLoading(false);
       return;
     }
 
-    // Optional fallback (only if you still want it)
-    // If your sessions are NOT shared across instances, this may fail randomly.
+    // Fallback: try API (only works if you have shared storage)
     if (!sessionId) {
       setErr("Missing sessionId in URL");
+      setLoading(false);
       return;
     }
 
     let cancelled = false;
 
-    (async () => {
+    async function load() {
+      setLoading(true);
+      setErr(null);
+
       try {
-        const res = await fetch(`/api/session?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+        const res = await fetch(`/api/session?sessionId=${encodeURIComponent(sessionId)}`, {
+          cache: "no-store",
+        });
+
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.error || "Failed to load session");
+
         if (!cancelled) setSession(json);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || "Failed to load session");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    })();
+    }
 
+    load();
     return () => {
       cancelled = true;
     };
-  }, [decoded, sessionId]);
+  }, [sessionId, decoded]);
 
-  /**
-   * ✅ This function is the ONLY thing your payment component must do:
-   * return a paymentToken (and optionally 3DS fields).
-   *
-   * Replace the body with your existing “working” payment component code.
-   */
-  async function collectPaymentToken(): Promise<{ paymentToken: string; threeDS?: ThreeDSFields }> {
-    if (!session) throw new Error("Session not loaded");
-    if (!mountRef.current) throw new Error("Payment UI mount not ready");
-
-    // ------------------------------------------------------------------
-    // 🔧 PASTE YOUR EXISTING PAYMENT COMPONENT MOUNT + TOKEN COLLECTION HERE
-    //
-    // You need to end up with:
-    //    paymentToken: string
-    // optionally also:
-    //    threeDS fields: { eci, cavv, xid, threeDsVersion, directoryServerId, cardHolderAuth }
-    //
-    // Example shape returned:
-    // return { paymentToken, threeDS: { eci, cavv, ... } };
-    // ------------------------------------------------------------------
-
-    throw new Error(
-      "Payment component not mounted yet. Paste the existing tokenisation code into collectPaymentToken()."
-    );
-  }
-
-  async function payNow() {
-    setErr(null);
-    setBusy(true);
-
-    try {
-      if (!session) throw new Error("Session not loaded");
-
-      // 1) tokenise card via payment component
-      const { paymentToken, threeDS } = await collectPaymentToken();
-
-      // 2) charge via your edge-lab API
-      const res = await fetch("/api/charge", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          sessionId: session.sessionId,
-          paymentToken,
-
-          // 3DS (optional)
-          cardHolderAuth: threeDS?.cardHolderAuth || "",
-          cavv: threeDS?.cavv || "",
-          directoryServerId: threeDS?.directoryServerId || "",
-          eci: threeDS?.eci || "",
-          threeDsVersion: threeDS?.threeDsVersion || "",
-          xid: threeDS?.xid || "",
-        }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Charge failed");
-
-      // 3) redirect to result page
-      window.location.href = `/result/${encodeURIComponent(session.sessionId)}`;
-    } catch (e: any) {
-      setErr(e?.message || "Payment failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  if (loading) return <div style={{ opacity: 0.7 }}>Loading payment session…</div>;
 
   if (err) {
     return (
@@ -165,7 +104,7 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
     );
   }
 
-  if (!session) return <div style={{ opacity: 0.7 }}>Loading payment session…</div>;
+  if (!session) return null;
 
   return (
     <div>
@@ -173,44 +112,38 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
         Order: {session.orderRef} — {session.currency} {Number(session.amount).toFixed(2)}
       </div>
 
-      {/* Payment component mounts here */}
-      <div
-        ref={mountRef}
-        style={{
-          border: "1px solid #eee",
-          borderRadius: 12,
-          padding: 12,
-          background: "#fafafa",
-        }}
-      >
-        <div style={{ fontSize: 13, opacity: 0.75 }}>
-          Payment component will mount here using tokenizationKey:
-          <div style={{ marginTop: 6, fontFamily: "ui-monospace", fontSize: 12 }}>
-            {session.tokenizationKey}
-          </div>
-        </div>
-      </div>
+      {/* ✅ Mount NMI Payment Component (tokenizationKey is safe in frontend) */}
+      <NmiPayments
+        tokenizationKey={session.tokenizationKey}
+        layout="multiLine"
+        paymentMethods={["card"]}
+        onPay={async (event: any) => {
+          try {
+            // You already have /api/charge expecting sessionId + paymentToken (and optional 3DS fields)
+            const resp = await fetch("/api/charge", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                sessionId: session.sessionId,
+                paymentToken: event.token,
+              }),
+            });
 
-      <button
-        type="button"
-        onClick={payNow}
-        disabled={busy}
-        style={{
-          marginTop: 14,
-          width: "100%",
-          padding: "14px",
-          borderRadius: 12,
-          border: "none",
-          background: "#DC2626",
-          color: "#fff",
-          fontWeight: 900,
-          fontSize: 16,
-          cursor: busy ? "not-allowed" : "pointer",
-          opacity: busy ? 0.6 : 1,
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) return data?.error || "Charge failed";
+
+            // /api/charge returns resultId + webhook status; hosted flow then shows result page
+            // You can optionally redirect to /result/:sessionId if that’s how your app works.
+            return true;
+          } catch (e: any) {
+            return e?.message || "Charge failed";
+          }
         }}
-      >
-        {busy ? "Processing…" : "Pay now →"}
-      </button>
+      />
+
+      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
+        Card data is tokenized in the component and your server charges using the token.  [oai_citation:1‡Payment component 022026.docx](sediment://file_00000000b7bc71f5938b4b76b25aacf9)
+      </div>
     </div>
   );
 }
