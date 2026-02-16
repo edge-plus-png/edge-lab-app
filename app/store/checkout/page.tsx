@@ -7,12 +7,14 @@ import { cartTotal, loadCart } from "../_cart";
 
 const LAB_RED = "#DC2626";
 
+// This is the “edge hosted checkout” domain (where sessions live + payUrl lives)
+const EDGE_LAB_BASE = "https://demo.edge-lab.uk";
+
 export default function CheckoutPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // “partner style” reference
   const [reference, setReference] = useState("INV-10001");
 
   // Return URL (demo sink) - locked down
@@ -35,8 +37,8 @@ export default function CheckoutPage() {
       return;
     }
 
-    const apiUrl = `https://demo.edge-lab.uk/api/webhook-sink?token=${encodeURIComponent(token)}`;
-    const viewUrl = `https://demo.edge-lab.uk/webhook-sink?token=${encodeURIComponent(token)}`;
+    const apiUrl = `${EDGE_LAB_BASE}/api/webhook-sink?token=${encodeURIComponent(token)}`;
+    const viewUrl = `${EDGE_LAB_BASE}/webhook-sink?token=${encodeURIComponent(token)}`;
 
     setReturnUrl(apiUrl);
     setSinkViewerUrl(viewUrl);
@@ -49,19 +51,15 @@ export default function CheckoutPage() {
     setBusy(true);
 
     try {
-      const res = await fetch("/api/session", {
+      // IMPORTANT: Partner behaviour — the partner site POSTs to edge-lab, not to itself.
+      const res = await fetch(`${EDGE_LAB_BASE}/api/session`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          // ✅ partner payload style supported by /api/session
           amount: Number(total.toFixed(2)),
           currency_code: "GBP",
           reference,
-
-          // ✅ locked return URL (allow-listed)
           returnUrl: returnUrl || undefined,
-
-          // ✅ required fields
           customer: { firstName, lastName, email, postalCode },
         }),
       });
@@ -69,7 +67,7 @@ export default function CheckoutPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to create session");
 
-      // Redirect to hosted payment page (payUrl)
+      // edge-lab returns payUrl -> redirect browser to hosted payment page
       window.location.href = data.payUrl;
     } catch (e: any) {
       setErr(e?.message || "Checkout failed");
@@ -78,9 +76,9 @@ export default function CheckoutPage() {
     }
   }
 
-  async function copy(text: string) {
+  async function copyReturnUrl() {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(returnUrl);
     } catch {
       // ignore
     }
@@ -107,7 +105,7 @@ export default function CheckoutPage() {
 
       {err && (
         <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca", marginBottom: 12 }}>
-          <b>Notice:</b> {err}
+          <b>Error:</b> {err}
         </div>
       )}
 
@@ -142,25 +140,24 @@ export default function CheckoutPage() {
               This URL is supplied during onboarding and allow-listed for security. After payment, edge-lab will POST the final result here automatically.
             </div>
 
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <input
-                style={{ ...inputStyle(), marginBottom: 0, background: "#f6f6f6" }}
+                style={{ ...inputStyle(), background: "#f6f6f6", cursor: "not-allowed", margin: 0 }}
                 value={returnUrl}
                 readOnly
               />
               <button
                 type="button"
-                onClick={() => copy(returnUrl)}
+                onClick={copyReturnUrl}
                 disabled={!returnUrl}
                 style={{
-                  padding: "12px 12px",
+                  padding: "12px 14px",
                   borderRadius: 12,
                   border: "1px solid #ddd",
                   background: "#fff",
+                  fontWeight: 900,
                   cursor: returnUrl ? "pointer" : "not-allowed",
                   opacity: returnUrl ? 1 : 0.6,
-                  fontWeight: 800,
-                  whiteSpace: "nowrap",
                 }}
               >
                 Copy
@@ -168,12 +165,12 @@ export default function CheckoutPage() {
             </div>
 
             {sinkViewerUrl && (
-              <div style={{ marginTop: 8 }}>
+              <div style={{ marginTop: 10 }}>
                 <a
                   href={sinkViewerUrl}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ fontSize: 12, fontWeight: 800, color: LAB_RED, textDecoration: "none" }}
+                  style={{ fontSize: 12, fontWeight: 700, color: LAB_RED, textDecoration: "none" }}
                 >
                   View received webhook →
                 </a>

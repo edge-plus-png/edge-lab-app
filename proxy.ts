@@ -22,16 +22,16 @@ function getTenantFromHost(hostHeader: string) {
   return sub;
 }
 
-// Tenants you recognise publicly
 const ALLOWED_TENANTS = new Set(["demo", "anytime", "nuco", "prismpay", "artisio"]);
 
 function isStaticAsset(path: string) {
+  // allow /edge-lab-logo.png, /file.svg, etc.
   return /\.[a-z0-9]+$/i.test(path);
 }
 
 /**
  * IMPORTANT:
- * Next.js will run this for every request handled by proxy.ts
+ * Next.js will run this function for every request handled by proxy.ts
  * Default export is the most reliable way to satisfy Turbopack.
  */
 export default function proxy(req: NextRequest) {
@@ -39,22 +39,13 @@ export default function proxy(req: NextRequest) {
   const slug = getTenantFromHost(host);
   const tenant = ALLOWED_TENANTS.has(slug) ? slug : "demo";
 
-  // 🔒 Store staging isolation
-  // Allow only store + necessary app routes to make the demo work end-to-end:
-  // - /store... (the demo store)
-  // - /api... (session create, webhook sink, etc.)
-  // - /pay... and /result... (hosted pay flow + result page)
-  // - /webhook-sink... (viewer page)
-  // - static assets
+  // 🔒 Store staging isolation (ONLY redirect page routes)
   if (host === "demo-store-staging.edge-lab.uk") {
     const path = req.nextUrl.pathname;
 
     const allow =
       path.startsWith("/store") ||
       path.startsWith("/api") ||
-      path.startsWith("/pay") ||
-      path.startsWith("/result") ||
-      path.startsWith("/webhook-sink") ||
       path.startsWith("/_next") ||
       path === "/favicon.ico" ||
       isStaticAsset(path);
