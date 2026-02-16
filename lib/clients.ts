@@ -1,3 +1,4 @@
+// lib/clients.ts
 import type { ClientConfig } from "./types";
 
 const CLIENTS: Record<string, ClientConfig> = {
@@ -11,9 +12,8 @@ const CLIENTS: Record<string, ClientConfig> = {
       "http://localhost",
       "http://127.0.0.1",
 
-      // Built-in webhook sink (demo uses same flow as everyone)
+      // Demo: allow only the built-in webhook sink (same flow as everyone)
       "https://demo.edge-lab.uk/api/webhook-sink",
-      "https://demo.edge-lab.uk/webhook-sink",
     ],
   },
 
@@ -26,14 +26,8 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
-
-      // Partner return URLs (lock these down as provided)
       "https://staging.anytimebooking.com",
       "https://anytimebooking.com",
-
-      // Built-in webhook sink on this tenant (useful for testing)
-      "https://anytime.edge-lab.uk/api/webhook-sink",
-      "https://anytime.edge-lab.uk/webhook-sink",
     ],
   },
 
@@ -46,14 +40,8 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
-
-      // Partner return URLs
       "https://nucotraining.com",
       "https://www.nucotraining.com",
-
-      // Built-in webhook sink on this tenant
-      "https://nuco.edge-lab.uk/api/webhook-sink",
-      "https://nuco.edge-lab.uk/webhook-sink",
     ],
   },
 
@@ -66,14 +54,8 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
-
-      // Partner return URLs
       "https://artisio.co",
       "https://www.artisio.co",
-
-      // Built-in webhook sink on this tenant
-      "https://artisio.edge-lab.uk/api/webhook-sink",
-      "https://artisio.edge-lab.uk/webhook-sink",
     ],
   },
 };
@@ -81,13 +63,8 @@ const CLIENTS: Record<string, ClientConfig> = {
 export function loadClientConfig(slug: string): ClientConfig {
   const cfg = CLIENTS[slug];
 
-  if (!cfg) {
-    throw new Error(`Unknown client: ${slug}`);
-  }
-
-  if (!cfg.tokenizationKey) {
-    throw new Error(`Missing tokenizationKey for client: ${slug}`);
-  }
+  if (!cfg) throw new Error(`Unknown client: ${slug}`);
+  if (!cfg.tokenizationKey) throw new Error(`Missing tokenizationKey for client: ${slug}`);
 
   return cfg;
 }
