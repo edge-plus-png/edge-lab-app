@@ -3,7 +3,7 @@ import PayClient from "./PayClient";
 
 const LAB_RED = "#DC2626";
 
-export default function PayPage({ params }: { params: { sessionId: string } }) {
+export default function PayPage({ params }: { params: { sessionId?: string } }) {
   const sessionId = params?.sessionId || "";
 
   return (

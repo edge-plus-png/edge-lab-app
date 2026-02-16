@@ -1,10 +1,8 @@
 // app/pay/[sessionId]/PayClient.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-
-// If you already installed: npm i @nmipayments/nmi-pay-react
 import { NmiPayments } from "@nmipayments/nmi-pay-react";
 
 type SessionResponse = {
@@ -26,13 +24,12 @@ function safeJsonParse<T>(s: string): T | null {
 
 function decodeP(p: string): SessionResponse | null {
   try {
-    // base64url -> base64
+    // base64url -> base64 (+ padding)
     let b64 = p.replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4) b64 += "="; // ✅ IMPORTANT (padding)
+    while (b64.length % 4) b64 += "=";
 
     const json = atob(b64);
     const data = safeJsonParse<SessionResponse>(json);
-
     if (!data?.sessionId || !data?.tokenizationKey) return null;
     return data;
   } catch {
@@ -44,99 +41,25 @@ export default function PayClient() {
   const params = useParams<{ sessionId?: string }>();
   const search = useSearchParams();
 
-  const sessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
+  const urlSessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
   const p = search.get("p") || "";
   const decoded = useMemo(() => (p ? decodeP(p) : null), [p]);
 
-  const [loading, setLoading] = useState(true);
+  // For Demo 2: payload is the source of truth.
+  const session = decoded;
+
   const [err, setErr] = useState<string | null>(null);
-  const [session, setSession] = useState<SessionResponse | null>(null);
 
-  const [isComplete, setIsComplete] = useState(false);
-  const [paymentToken, setPaymentToken] = useState<string>("");
-
-  useEffect(() => {
-    // If we have payload in `p`, we do not need shared storage.
-    if (decoded) {
-      setSession(decoded);
-      setErr(null);
-      setLoading(false);
-      return;
-    }
-
-    // Fallback: load from API using sessionId
-    if (!sessionId) {
-      setErr("Missing sessionId in URL");
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setErr(null);
-
-      try {
-        const res = await fetch(`/api/session?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(json?.error || "Failed to load session");
-        if (!cancelled) setSession(json);
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message || "Failed to load session");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId, decoded]);
-
-  async function submitCharge() {
-    if (!session) return;
-    if (!isComplete || !paymentToken) {
-      setErr("Payment details incomplete");
-      return;
-    }
-
-    setErr(null);
-
-    const res = await fetch("/api/charge", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        sessionId: session.sessionId,
-        orderRef: session.orderRef,
-        amount: session.amount,
-        currency: session.currency,
-        paymentToken, // token from NMI component
-      }),
-    });
-
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setErr(json?.error || "Charge failed");
-      return;
-    }
-
-    // For lab: just show success
-    alert(`Lab result: ${json.status || "approved"} (tx=${json.transactionId || "n/a"})`);
-  }
-
-  if (loading) return <div style={{ opacity: 0.7 }}>Loading payment session…</div>;
-
-  if (err) {
+  if (!session) {
     return (
       <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
-        <b>Error:</b> {err}
+        <b>Error:</b> Missing or invalid payload. (Expected ?p=... in URL)
+        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+          URL sessionId: <b>{urlSessionId || "—"}</b>
+        </div>
       </div>
     );
   }
-
-  if (!session) return null;
 
   return (
     <div>
@@ -144,40 +67,47 @@ export default function PayClient() {
         Order: {session.orderRef} — {session.currency} {Number(session.amount).toFixed(2)}
       </div>
 
-      <div style={{ marginTop: 10 }}>
-        <NmiPayments
-          tokenizationKey={session.tokenizationKey}
-          layout="multiLine"
-          paymentMethods={["card"]}
-          onChange={(data: any) => {
-            setIsComplete(!!data?.complete);
-            if (data?.complete && data?.token) setPaymentToken(String(data.token));
-          }}
-        />
-      </div>
+      {err && (
+        <div style={{ padding: 12, marginBottom: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
+          <b>Error:</b> {err}
+        </div>
+      )}
 
-      <button
-        type="button"
-        onClick={submitCharge}
-        disabled={!isComplete}
-        style={{
-          marginTop: 14,
-          width: "100%",
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: "none",
-          background: "#111",
-          color: "#fff",
-          fontWeight: 900,
-          cursor: isComplete ? "pointer" : "not-allowed",
-          opacity: isComplete ? 1 : 0.6,
+      <NmiPayments
+        tokenizationKey={session.tokenizationKey}
+        layout="multiLine"
+        paymentMethods={["card"]}
+        onPay={async (event: { token: string }) => {
+          setErr(null);
+
+          try {
+            const res = await fetch("/api/charge", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                // Don’t rely on stored sessions in Demo 2
+                sessionId: session.sessionId,
+                orderRef: session.orderRef,
+                amount: session.amount,
+                currency: session.currency,
+                paymentToken: event.token,
+                returnUrl: session.returnUrl || "",
+              }),
+            });
+
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) return json?.error || "Charge failed";
+
+            // Returning true tells the component “success”
+            return true;
+          } catch (e: any) {
+            return e?.message || "Charge failed";
+          }
         }}
-      >
-        Pay
-      </button>
+      />
 
       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-        Token is created in-browser by the Payment Component, then posted server-to-server for processing.  [oai_citation:1‡Payment component 022026.docx](sediment://file_000000007de8720e8aadad2a462fc28c)
+        Token is created in-browser by the Payment Component, then posted server-to-server for processing.  [oai_citation:3‡Payment component 022026.docx](sediment://file_000000007de8720e8aadad2a462fc28c)
       </div>
     </div>
   );
