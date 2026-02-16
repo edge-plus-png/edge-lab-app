@@ -79,41 +79,16 @@ async function postReturnUrl(returnUrl: string, payload: any) {
   }
 }
 
-type ChargeBody = {
-  sessionId?: string;
-  paymentToken?: string;
-
-  amount?: number;
-  currency?: string;
-  orderRef?: string;
-  returnUrl?: string;
-
-  customer?: {
-    firstName?: string;
-    lastName?: string;
-    email?: string;
-    postalCode?: string;
-  };
-
-  // 3DS (optional)
-  eci?: string;
-  cavv?: string;
-  xid?: string;
-  threeDsVersion?: string;
-  directoryServerId?: string;
-  cardHolderAuth?: string;
-};
-
 export async function POST(req: NextRequest) {
   const tenant = resolveTenant(req);
   const cfg = loadClientConfig(tenant);
 
-  const body = (await req.json().catch(() => ({}))) as ChargeBody;
+  const body = await req.json().catch(() => ({}));
 
   const sessionId = String(body.sessionId || "");
   const paymentToken = String(body.paymentToken || "");
 
-  // Optional 3DS fields (only used if present)
+  // 3DS fields (from NmiThreeDSecure onComplete)  [oai_citation:4‡Payment component 022026.docx](sediment://file_000000007de8720e8aadad2a462fc28c)
   const eci = body.eci ? String(body.eci) : "";
   const cavv = body.cavv ? String(body.cavv) : "";
   const xid = body.xid ? String(body.xid) : "";
@@ -121,11 +96,20 @@ export async function POST(req: NextRequest) {
   const directoryServerId = body.directoryServerId ? String(body.directoryServerId) : "";
   const cardHolderAuth = body.cardHolderAuth ? String(body.cardHolderAuth) : "";
 
-  // Fallback values for demo p= flow only
+  // Fallback values for p= flow only
   const clientAmount = Number(body.amount);
   const clientCurrency = String(body.currency || "GBP");
   const clientOrderRef = String(body.orderRef || "");
-  const clientReturnUrl = String(body.returnUrl || "");
+
+  // Customer fallback (prefer session -> else body.customer)
+  const clientCustomer = body.customer || {};
+  const clientFirstName = String(clientCustomer.firstName || "");
+  const clientLastName = String(clientCustomer.lastName || "");
+  const clientEmail = String(clientCustomer.email || "");
+  const clientPostalCode = String(clientCustomer.postalCode || "");
+  const clientAddress1 = String(clientCustomer.address1 || "");
+  const clientCity = String(clientCustomer.city || "");
+  const clientCountry = String(clientCustomer.country || "");
 
   if (!sessionId || !paymentToken) {
     return NextResponse.json(
@@ -136,32 +120,30 @@ export async function POST(req: NextRequest) {
 
   // Prefer server-side session (if available)
   const session: any = getSession(sessionId);
+
   const amount = session?.amount ?? clientAmount;
   const currency = session?.currency ?? clientCurrency;
   const orderRef = session?.orderRef ?? clientOrderRef;
+  const returnUrl = session?.returnUrl || "";
 
-  // Return URL: prefer session, else allow client (demo p= flow)
-  const returnUrl = String(session?.returnUrl || clientReturnUrl || "");
-
-  // Customer: prefer session, else allow client (demo p= flow)
-  const customer = {
-    firstName: String(session?.customer?.firstName || body.customer?.firstName || ""),
-    lastName: String(session?.customer?.lastName || body.customer?.lastName || ""),
-    email: String(session?.customer?.email || body.customer?.email || ""),
-    postalCode: String(session?.customer?.postalCode || body.customer?.postalCode || ""),
-  };
+  const firstName = String(session?.customer?.firstName || clientFirstName || "");
+  const lastName = String(session?.customer?.lastName || clientLastName || "");
+  const email = String(session?.customer?.email || clientEmail || "");
+  const postalCode = String(session?.customer?.postalCode || clientPostalCode || "");
+  const address1 = String(session?.customer?.address1 || clientAddress1 || "");
+  const city = String(session?.customer?.city || clientCity || "");
+  const country = String(session?.customer?.country || clientCountry || "");
 
   if (!amount || amount <= 0 || !orderRef) {
     return NextResponse.json(
-      { error: "Missing amount/orderRef (session not found and not provided in request)" },
+      { error: "Missing amount/orderRef" },
       { status: 400, headers: corsHeaders(req) }
     );
   }
 
-  // We want these visible in NMI (name + postcode). Require them for v1.
-  if (!customer.firstName || !customer.lastName || !customer.postalCode) {
+  if (!firstName || !lastName || !email || !postalCode) {
     return NextResponse.json(
-      { error: "Missing customer firstName/lastName/postalCode" },
+      { error: "Missing customer fields (firstName,lastName,email,postalCode)" },
       { status: 400, headers: corsHeaders(req) }
     );
   }
@@ -185,11 +167,6 @@ export async function POST(req: NextRequest) {
 
   /**
    * REAL NMI SALE
-   * - payment_token from NMI Payment Component
-   * - type=sale
-   * - amount/currency
-   * - orderid
-   * - customer fields (so they appear in the gateway UI)
    */
   const form = new URLSearchParams();
   form.set("security_key", privateKey);
@@ -198,39 +175,30 @@ export async function POST(req: NextRequest) {
   form.set("currency", currency);
   form.set("payment_token", paymentToken);
 
-  // ✅ Shows in NMI
+  // ✅ Make it show in NMI (order + billing identity)
   form.set("orderid", orderRef);
-  form.set("firstname", customer.firstName);
-  form.set("lastname", customer.lastName);
-  form.set("zip", customer.postalCode);
-  if (customer.email) form.set("email", customer.email);
+  form.set("first_name", firstName);
+  form.set("last_name", lastName);
+  form.set("email", email);
+  form.set("zip", postalCode);
+  if (address1) form.set("address1", address1);
+  if (city) form.set("city", city);
+  if (country) form.set("country", country);
 
-  /**
-   * ✅ 3DS bridge (best-effort)
-   * Note: exact field names can be processor/account dependent.
-   * We send common ones (eci/cavv/xid) AND also mirror into MDD fields for visibility.
-   */
+  // ✅ 3DS bridge — only set if present
   if (eci) form.set("eci", eci);
   if (cavv) form.set("cavv", cavv);
   if (xid) form.set("xid", xid);
-
-  // Some accounts expect different names; we include these as well (harmless if ignored).
   if (threeDsVersion) form.set("three_ds_version", threeDsVersion);
   if (directoryServerId) form.set("directory_server_id", directoryServerId);
   if (cardHolderAuth) form.set("cardholder_auth", cardHolderAuth);
 
-  // Helpful metadata (always visible in NMI)
+  // Helpful metadata
   form.set("merchant_defined_field_1", "edge-lab");
   form.set("merchant_defined_field_2", tenant);
   form.set("merchant_defined_field_3", sessionId);
 
-  // Mirror 3DS into visible fields too (so you can prove it even if processor doesn’t surface it)
-  if (eci) form.set("merchant_defined_field_4", `eci:${eci}`);
-  if (cavv) form.set("merchant_defined_field_5", `cavv:${cavv}`);
-  if (xid) form.set("merchant_defined_field_6", `xid:${xid}`);
-  if (threeDsVersion) form.set("merchant_defined_field_7", `3ds:${threeDsVersion}`);
-
-  // NMI endpoint (your key/account decides sandbox vs live)
+  // NMI endpoint
   const nmiRes = await fetch("https://secure.networkmerchants.com/api/transact.php", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -244,42 +212,37 @@ export async function POST(req: NextRequest) {
   const result = {
     event: "payment.completed",
     client: tenant,
-    status, // approved | declined | error
+    status,
 
     session_id: sessionId,
     reference: orderRef,
     amount: Number(Number(amount).toFixed(2)),
     currency,
 
-    customer: {
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      email: customer.email,
-      postalCode: customer.postalCode,
-    },
+    customer: { firstName, lastName, email, postalCode },
 
     gateway: {
       transaction_id: parsed.transactionid || "",
       response: parsed.response || "",
-      response_code: parsed.response_code || "",
       message: parsed.responsetext || "",
       auth_code: parsed.authcode || "",
       avs: parsed.avsresponse || "",
       cvv: parsed.cvvresponse || "",
 
-      // echo back what we know (parsed wins, else our input)
+      // 3DS visibility (what NMI echoes back varies by account/config)
       eci: parsed.eci || eci,
       cavv: parsed.cavv || cavv,
       xid: parsed.xid || xid,
-      three_ds_version: parsed.threeds_version || parsed.three_ds_version || threeDsVersion,
+      three_ds_version:
+        parsed.threeds_version || parsed.three_ds_version || threeDsVersion,
+      directory_server_id: parsed.directory_server_id || directoryServerId,
+      cardholder_auth: parsed.cardholder_auth || cardHolderAuth,
     },
 
     created_at: new Date().toISOString(),
   };
 
-  // Best-effort webhook (if present)
   if (returnUrl) await postReturnUrl(returnUrl, result);
 
-  // Keep 200 so demo flows don’t “hard fail” — status tells the story
   return NextResponse.json(result, { headers: corsHeaders(req) });
 }
