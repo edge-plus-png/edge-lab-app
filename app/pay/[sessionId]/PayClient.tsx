@@ -1,8 +1,7 @@
-// app/pay/[sessionId]/PayClient.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 type SessionResponse = {
   sessionId: string;
@@ -21,31 +20,34 @@ function safeJsonParse<T>(s: string): T | null {
   }
 }
 
+/**
+ * Decodes base64url `p` payload into SessionResponse.
+ * IMPORTANT: base64 must be padded to multiple of 4, or atob() can fail.
+ */
 function decodeP(p: string): SessionResponse | null {
   try {
-    // base64url -> base64
     let b64 = p.replace(/-/g, "+").replace(/_/g, "/");
-
-    // ✅ add padding (THIS is what was missing)
-    while (b64.length % 4) {
-      b64 += "=";
-    }
+    while (b64.length % 4) b64 += "="; // ✅ REQUIRED padding
 
     const json = atob(b64);
     const data = safeJsonParse<SessionResponse>(json);
 
     if (!data?.sessionId || !data?.tokenizationKey) return null;
-
     return data;
   } catch {
     return null;
   }
 }
 
-export default function PayClient({ sessionId }: { sessionId: string }) {
+export default function PayClient() {
+  const params = useParams<{ sessionId?: string }>();
   const search = useSearchParams();
-  const p = search.get("p") || "";
 
+  // sessionId from route /pay/[sessionId]
+  const sessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
+
+  // p payload from URL ?p=...
+  const p = search.get("p") || "";
   const decoded = useMemo(() => (p ? decodeP(p) : null), [p]);
 
   const [loading, setLoading] = useState(true);
@@ -53,7 +55,7 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
   const [session, setSession] = useState<SessionResponse | null>(null);
 
   useEffect(() => {
-    // ✅ If we have payload in `p`, no need to fetch anything (works without shared storage).
+    // ✅ Best path: if `p` exists and decodes, we don't need shared storage at all.
     if (decoded) {
       setSession(decoded);
       setErr(null);
@@ -61,7 +63,7 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
       return;
     }
 
-    // Fallback to API
+    // Fallback path: fetch session from API (only works if storage is shared)
     if (!sessionId) {
       setErr("Missing sessionId in URL");
       setLoading(false);
@@ -78,8 +80,10 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
         const res = await fetch(`/api/session?sessionId=${encodeURIComponent(sessionId)}`, {
           cache: "no-store",
         });
+
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.error || "Failed to load session");
+
         if (!cancelled) setSession(json);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || "Failed to load session");
@@ -112,8 +116,14 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
         Order: {session.orderRef} — {session.currency} {Number(session.amount).toFixed(2)}
       </div>
 
+      {/* Replace this with your real NMI component mount */}
       <div style={{ opacity: 0.75, fontSize: 13 }}>
         (Payment component mounts here using tokenizationKey)
+      </div>
+
+      {/* Optional: show whether we came from payload or API */}
+      <div style={{ marginTop: 10, fontSize: 12, opacity: 0.6 }}>
+        Source: {decoded ? "URL payload (p)" : "API lookup"}
       </div>
     </div>
   );
