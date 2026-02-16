@@ -1,3 +1,4 @@
+// app/pay/[sessionId]/PayClient.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -17,6 +18,12 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
   const [session, setSession] = useState<SessionResponse | null>(null);
 
   useEffect(() => {
+    if (!sessionId) {
+      setErr("Missing sessionId");
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     async function load() {
@@ -24,14 +31,13 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
       setErr(null);
 
       try {
-        // IMPORTANT: use the prop sessionId (route param), not querystring.
-        const res = await fetch(`/api/session?sessionId=${encodeURIComponent(sessionId)}`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/session?sessionId=${encodeURIComponent(sessionId)}`,
+          { cache: "no-store" }
+        );
         const json = await res.json();
 
         if (!res.ok) throw new Error(json?.error || "Failed to load session");
-
         if (!cancelled) setSession(json);
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || "Failed to load session");
@@ -64,8 +70,6 @@ export default function PayClient({ sessionId }: { sessionId: string }) {
         Order: {session.orderRef} — {session.currency} {Number(session.amount).toFixed(2)}
       </div>
 
-      {/* This is where your NMI Payment Component UI mounts.
-         Keeping this simple here because your existing component already does it. */}
       <div style={{ opacity: 0.75, fontSize: 13 }}>
         (Payment component mounts here using tokenizationKey)
       </div>

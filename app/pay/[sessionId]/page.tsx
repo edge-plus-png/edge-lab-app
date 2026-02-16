@@ -1,9 +1,18 @@
+// app/pay/[sessionId]/page.tsx
 import PayClient from "./PayClient";
 
 const LAB_RED = "#DC2626";
 
-export default function PayPage({ params }: { params: { sessionId: string } }) {
-  const { sessionId } = params;
+type Params = { sessionId?: string };
+
+export default async function PayPage({
+  params,
+}: {
+  params: Params | Promise<Params>;
+}) {
+  // ✅ Next 16 safe: params may be async depending on build/runtime
+  const resolved = await Promise.resolve(params);
+  const sessionId = resolved?.sessionId;
 
   return (
     <main
@@ -39,7 +48,7 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
           </div>
 
           <div style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>
-            Session: <b>{sessionId}</b>
+            Session: <b>{sessionId || "—"}</b>
           </div>
         </div>
 
@@ -55,7 +64,20 @@ export default function PayPage({ params }: { params: { sessionId: string } }) {
         >
           <div style={{ height: 5, background: LAB_RED }} />
           <div style={{ padding: 22 }}>
-            <PayClient sessionId={sessionId} />
+            {!sessionId ? (
+              <div
+                style={{
+                  padding: 12,
+                  background: "#fee2e2",
+                  borderRadius: 12,
+                  border: "1px solid #fecaca",
+                }}
+              >
+                <b>Error:</b> Missing sessionId route param
+              </div>
+            ) : (
+              <PayClient sessionId={sessionId} />
+            )}
           </div>
         </div>
 
