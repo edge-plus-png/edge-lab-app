@@ -5,6 +5,38 @@ import { loadClientConfig } from "@/lib/clients";
 import { createSession, getSession } from "@/lib/store";
 import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 
+/**
+ * CORS
+ * Demo 2 (partner site) lives on demo-store(-staging).edge-lab.uk and calls demo.edge-lab.uk.
+ * Browsers will preflight (OPTIONS). Without CORS headers you'll get "TypeError: Load failed".
+ */
+const ALLOW_ORIGINS = [
+  "https://demo-store-staging.edge-lab.uk",
+  "https://demo-store.edge-lab.uk",
+];
+
+function corsHeaders(req: NextRequest) {
+  const origin = req.headers.get("origin") || "";
+  const allowOrigin = ALLOW_ORIGINS.includes(origin) ? origin : "";
+
+  // If origin not allow-listed, we return no allow-origin header.
+  // That means browsers will block it, but server-to-server requests still work.
+  const headers: Record<string, string> = {
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-headers": "content-type",
+    "access-control-max-age": "600",
+    vary: "origin",
+  };
+
+  if (allowOrigin) headers["access-control-allow-origin"] = allowOrigin;
+
+  return headers;
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
+}
+
 function resolveTenant(req: NextRequest) {
   // Prefer proxy-provided tenant
   const hdr = req.headers.get("x-edge-lab-tenant");
@@ -17,8 +49,6 @@ function resolveTenant(req: NextRequest) {
 
 function reqBaseUrl(req: NextRequest) {
   const host = req.headers.get("host") || "";
-  // If you ever terminate TLS elsewhere and forward proto, you can enhance this,
-  // but for your edge-lab domains https is correct.
   return `https://${host}`;
 }
 
@@ -28,22 +58,31 @@ export async function GET(req: NextRequest) {
 
   const sessionId = req.nextUrl.searchParams.get("sessionId") || "";
   if (!sessionId) {
-    return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing sessionId" },
+      { status: 400, headers: corsHeaders(req) }
+    );
   }
 
   const session = getSession(sessionId);
   if (!session || session.slug !== slug) {
-    return NextResponse.json({ error: "Unknown sessionId" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Unknown sessionId" },
+      { status: 404, headers: corsHeaders(req) }
+    );
   }
 
-  return NextResponse.json({
-    sessionId: session.sessionId ?? sessionId,
-    amount: session.amount,
-    currency: session.currency,
-    orderRef: session.orderRef,
-    returnUrl: session.returnUrl || "",
-    tokenizationKey: cfg.tokenizationKey,
-  });
+  return NextResponse.json(
+    {
+      sessionId: session.sessionId ?? sessionId,
+      amount: session.amount,
+      currency: session.currency,
+      orderRef: session.orderRef,
+      returnUrl: session.returnUrl || "",
+      tokenizationKey: cfg.tokenizationKey,
+    },
+    { headers: corsHeaders(req) }
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -62,32 +101,30 @@ export async function POST(req: NextRequest) {
   const max = Number(process.env.EDGE_LAB_MAX_AMOUNT || "50");
 
   if (!amount || amount <= 0) {
-    return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid amount" },
+      { status: 400, headers: corsHeaders(req) }
+    );
   }
 
   if (amount > max) {
     return NextResponse.json(
       { error: `Amount exceeds lab limit (£${max}).` },
-      { status: 400 }
+      { status: 400, headers: corsHeaders(req) }
     );
   }
 
   if (!orderRef) {
     return NextResponse.json(
       { error: "Missing orderRef/reference" },
-      { status: 400 }
+      { status: 400, headers: corsHeaders(req) }
     );
   }
 
-  if (
-    !customer.firstName ||
-    !customer.lastName ||
-    !customer.email ||
-    !customer.postalCode
-  ) {
+  if (!customer.firstName || !customer.lastName || !customer.email || !customer.postalCode) {
     return NextResponse.json(
       { error: "Missing required customer fields" },
-      { status: 400 }
+      { status: 400, headers: corsHeaders(req) }
     );
   }
 
@@ -97,7 +134,7 @@ export async function POST(req: NextRequest) {
     } catch (e: any) {
       return NextResponse.json(
         { error: e?.message || "Invalid returnUrl" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders(req) }
       );
     }
   }
@@ -118,9 +155,10 @@ export async function POST(req: NextRequest) {
 
   const sessionId = session.sessionId;
 
-  // ✅ IMPORTANT: keep payUrl on the SAME host that created the session
-  // This avoids "Unknown sessionId" with in-memory session storage.
+  // IMPORTANT:
+  // Keep payUrl on the SAME host that created the session.
+  // With in-memory session storage, switching host = "Unknown sessionId".
   const payUrl = `${reqBaseUrl(req)}/pay/${sessionId}`;
 
-  return NextResponse.json({ sessionId, payUrl });
+  return NextResponse.json({ sessionId, payUrl }, { headers: corsHeaders(req) });
 }

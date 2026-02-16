@@ -25,14 +25,13 @@ function getTenantFromHost(hostHeader: string) {
 const ALLOWED_TENANTS = new Set(["demo", "anytime", "nuco", "prismpay", "artisio"]);
 
 function isStaticAsset(path: string) {
-  // allow /edge-lab-logo.png, /file.svg, etc.
   return /\.[a-z0-9]+$/i.test(path);
 }
 
 /**
- * IMPORTANT:
- * Next.js will run this function for every request handled by proxy.ts
- * Default export is the most reliable way to satisfy Turbopack.
+ * Next.js proxy.ts:
+ * MUST export default function (Turbopack is strict here)
+ * and if we want routes to "see" a header, we must set it on the REQUEST.
  */
 export default function proxy(req: NextRequest) {
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
@@ -55,9 +54,15 @@ export default function proxy(req: NextRequest) {
     }
   }
 
-  const res = NextResponse.next();
-  res.headers.set("x-edge-lab-tenant", tenant);
-  return res;
+  // ✅ IMPORTANT: inject tenant into the REQUEST headers so route handlers can read it.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-edge-lab-tenant", tenant);
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 }
 
 export const config = {

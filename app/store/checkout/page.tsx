@@ -51,7 +51,7 @@ export default function CheckoutPage() {
     setBusy(true);
 
     try {
-      // IMPORTANT: Partner behaviour — the partner site POSTs to edge-lab, not to itself.
+      // Partner behaviour — the partner site POSTs to edge-lab, not to itself.
       const res = await fetch(`${EDGE_LAB_BASE}/api/session`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -59,7 +59,10 @@ export default function CheckoutPage() {
           amount: Number(total.toFixed(2)),
           currency_code: "GBP",
           reference,
+
+          // locked return URL (must be allow-listed)
           returnUrl: returnUrl || undefined,
+
           customer: { firstName, lastName, email, postalCode },
         }),
       });
@@ -109,6 +112,12 @@ export default function CheckoutPage() {
         </div>
       )}
 
+      {items.length === 0 && (
+        <div style={{ padding: 12, background: "#fff", borderRadius: 12, border: "1px solid #eee", marginBottom: 12 }}>
+          Your cart is empty. <a href="/store">Go add a product</a>.
+        </div>
+      )}
+
       <div style={{ border: "1px solid #eee", borderRadius: 16, background: "#fff", overflow: "hidden" }}>
         <div style={{ height: 5, background: LAB_RED }} />
 
@@ -137,7 +146,8 @@ export default function CheckoutPage() {
             <h3 style={{ marginTop: 18 }}>Return URL (webhook receiver)</h3>
 
             <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 8 }}>
-              This URL is supplied during onboarding and allow-listed for security. After payment, edge-lab will POST the final result here automatically.
+              This URL is supplied during onboarding and allow-listed for security. After payment, edge-lab will POST the final
+              result here automatically.
             </div>
 
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
