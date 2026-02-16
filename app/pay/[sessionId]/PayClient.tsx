@@ -47,13 +47,10 @@ function safeJsonParse<T>(s: string): T | null {
 
 function decodeP(p: string): SessionResponse | null {
   try {
-    // base64url -> base64 (+ padding)
     let b64 = p.replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4) b64 += "=";
-
     const json = atob(b64);
     const data = safeJsonParse<SessionResponse>(json);
-
     if (!data?.sessionId || !data?.tokenizationKey) return null;
     return data;
   } catch {
@@ -67,8 +64,6 @@ export default function PayClient() {
 
   const urlSessionId = typeof params?.sessionId === "string" ? params.sessionId : "";
   const p = search.get("p") || "";
-
-  // Demo 2: payload is source of truth
   const session = useMemo(() => (p ? decodeP(p) : null), [p]);
 
   const threeDSRef = useRef<NmiThreeDSecureRef>(null);
@@ -76,14 +71,12 @@ export default function PayClient() {
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  const [fieldsReady, setFieldsReady] = useState(false);
-
   const [isValid, setIsValid] = useState(false);
   const [paymentToken, setPaymentToken] = useState<string>("");
 
   const [isBusy, setIsBusy] = useState(false);
+  const [isDone, setIsDone] = useState(false);
 
-  // --- Hard stop if payload missing ---
   if (!session) {
     return (
       <div style={{ padding: 12, background: "#fee2e2", borderRadius: 12, border: "1px solid #fecaca" }}>
@@ -95,7 +88,7 @@ export default function PayClient() {
     );
   }
 
-  // TS-safe alias
+  // capture non-null for TS
   const s = session;
 
   const customer = s.customer || {};
@@ -120,18 +113,16 @@ export default function PayClient() {
           currency: s.currency,
           paymentToken,
 
-          // Pass customer so NMI shows it (and so you can fall back if session store is empty)
           customer: {
             firstName,
             lastName,
             email,
             postalCode,
-            address1: customer.address1 || "",
-            city: customer.city || "",
-            country: customer.country || "",
+            address1: String(customer.address1 || ""),
+            city: String(customer.city || ""),
+            country: String(customer.country || ""),
           },
 
-          // 3DS bridge to backend
           cardHolderAuth: threeDS.cardHolderAuth,
           cavv: threeDS.cavv,
           directoryServerId: threeDS.directoryServerId,
@@ -148,12 +139,15 @@ export default function PayClient() {
         return;
       }
 
-      // Only show green success if approved
-      if (json?.status === "approved") {
-        setOkMsg(`approved (tx=${json?.gateway?.transaction_id || "n/a"}, eci=${json?.gateway?.eci || "—"})`);
-      } else {
-        setErr(`${json?.status || "error"} (tx=${json?.gateway?.transaction_id || "n/a"})`);
-      }
+      // success UI
+      const tx = json?.gateway?.transaction_id || json?.nmi?.transactionid || "n/a";
+      const eciOut = json?.gateway?.eci || "—";
+      setOkMsg(`${json.status || "approved"} (tx=${tx}, eci=${eciOut})`);
+      setIsDone(true);
+
+      // optional: clear token once done
+      setPaymentToken("");
+      setIsValid(false);
     } catch (e: any) {
       setErr(e?.message || "Charge failed");
     } finally {
@@ -170,7 +164,8 @@ export default function PayClient() {
       return;
     }
 
-    // Trigger payer auth (3DS) — then onComplete → submitCharge()
+    setIsBusy(true);
+
     threeDSRef.current?.startThreeDSecure({
       paymentToken,
       currency: s.currency,
@@ -186,7 +181,42 @@ export default function PayClient() {
   }
 
   return (
-    <div>
+    <div style={{ position: "relative" }}>
+      {/* Busy overlay (spinner) */}
+      {isBusy && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(255,255,255,0.75)",
+            backdropFilter: "blur(2px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10,
+            borderRadius: 12,
+          }}
+        >
+          <div style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 700 }}>
+            <div
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 999,
+                border: "3px solid #ddd",
+                borderTopColor: "#111",
+                animation: "spin 0.8s linear infinite",
+              }}
+            />
+            Processing…
+          </div>
+
+          <style>{`
+            @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          `}</style>
+        </div>
+      )}
+
       <div style={{ fontWeight: 900, marginBottom: 10 }}>
         Order: {s.orderRef} — {s.currency} {Number(s.amount).toFixed(2)}
       </div>
@@ -203,64 +233,57 @@ export default function PayClient() {
         </div>
       )}
 
-      {/* Simple “spinner” while fields initialise */}
-      {!fieldsReady && (
-        <div style={{ padding: 12, marginBottom: 12, borderRadius: 12, background: "#f3f4f6", border: "1px solid #e5e7eb" }}>
-          Loading secure payment fields…
-        </div>
+      {/* Hide the card form once done */}
+      {!isDone && (
+        <>
+          <NmiPayments
+            tokenizationKey={s.tokenizationKey}
+            layout="multiLine"
+            paymentMethods={["card"]}
+            onChange={(data: any) => {
+              setIsValid(!!data?.complete);
+              if (data?.complete && data?.token) setPaymentToken(String(data.token));
+            }}
+          />
+
+          <NmiThreeDSecure
+            ref={threeDSRef}
+            tokenizationKey={s.tokenizationKey}
+            modal={true}
+            onFailure={(e: any) => {
+              setIsBusy(false);
+              setErr(e?.message || "3DS authentication failed");
+            }}
+            onComplete={(result: any) => {
+              // 3DS finished; now charge
+              submitCharge(result as ThreeDSCompleteEvent);
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={start3DS}
+            disabled={!isValid || !paymentToken || isBusy}
+            style={{
+              marginTop: 14,
+              width: "100%",
+              padding: "12px 14px",
+              borderRadius: 12,
+              border: "none",
+              background: "#111",
+              color: "#fff",
+              fontWeight: 900,
+              cursor: !isValid || !paymentToken || isBusy ? "not-allowed" : "pointer",
+              opacity: !isValid || !paymentToken || isBusy ? 0.6 : 1,
+            }}
+          >
+            Pay with 3D Secure
+          </button>
+        </>
       )}
 
-      <NmiPayments
-        tokenizationKey={s.tokenizationKey}
-        layout="multiLine"
-        paymentMethods={["card"]}
-        onFieldsAvailable={() => setFieldsReady(true)} // doc mentions this hook  [oai_citation:1‡Payment component 022026.docx](sediment://file_000000007de8720e8aadad2a462fc28c)
-        onChange={(data: any) => {
-          setIsValid(!!data?.complete);
-          if (data?.complete && data?.token) setPaymentToken(String(data.token));
-        }}
-      />
-
-      <NmiThreeDSecure
-        ref={threeDSRef}
-        tokenizationKey={s.tokenizationKey}
-        modal={true}
-        onFailure={(e: any) => {
-          setIsBusy(false);
-          setErr(e?.message || "3DS authentication failed");
-        }}
-        onComplete={(result: any) => {
-          // result includes: cavv/eci/threeDsVersion etc
-          submitCharge(result as ThreeDSCompleteEvent);
-        }}
-        onChallenge={() => {
-          // Optional: mark busy when challenge starts
-          setIsBusy(true);
-        }}
-      />
-
-      <button
-        type="button"
-        onClick={start3DS}
-        disabled={!isValid || !paymentToken || isBusy}
-        style={{
-          marginTop: 14,
-          width: "100%",
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: "none",
-          background: "#111",
-          color: "#fff",
-          fontWeight: 900,
-          cursor: !isValid || !paymentToken || isBusy ? "not-allowed" : "pointer",
-          opacity: !isValid || !paymentToken || isBusy ? 0.6 : 1,
-        }}
-      >
-        {isBusy ? "Processing…" : "Pay with 3D Secure"}
-      </button>
-
       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-        Token is created in-browser by the NMI Payment Component, then posted server-to-server for processing.  [oai_citation:2‡Payment component 022026.docx](sediment://file_000000007de8720e8aadad2a462fc28c)
+        Payment token is created in-browser by the NMI component, 3DS runs, then the token + 3DS fields are posted server-to-server for processing.
       </div>
     </div>
   );
