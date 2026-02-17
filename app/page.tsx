@@ -3,6 +3,19 @@
 import { useEffect, useState } from "react";
 
 const LAB_RED = "#DC2626";
+const TEST_CARDS: Array<{ name: string; number?: string }> = [
+  { name: "Successful Frictionless", number: "4000000000002701" },
+  { name: "Failed Frictionless", number: "4000000000002925" },
+  { name: "Attempted Frictionless", number: "4000000000002719" },
+  { name: "Unavailable Authentication", number: "4000000000002313" },
+  { name: "Rejected Authentication", number: "4000000000002537" },
+  { name: "Unknown Error", number: "4000000000002990" },
+  { name: "Timeout Error", number: "4000000000002354" },
+  { name: "Successful Step Up", number: "4000000000002503" },
+  { name: "Failed Step Up" },
+  { name: "Unavailable Step Up", number: "4000000000002420" },
+  { name: "Error on Authentication", number: "4000000000002644" },
+];
 
 export default function HomePage() {
   const [tenant, setTenant] = useState<string>("");
@@ -129,6 +142,53 @@ export default function HomePage() {
 
         <div style={{ marginTop: 10, fontSize: 13, opacity: 0.8 }}>
           Inline option: you can also embed the NMI Payment Component directly in your checkout instead of redirecting.
+        </div>
+      </div>
+
+      <div
+        style={{
+          border: "1px solid #eee",
+          borderRadius: 16,
+          background: "#fff",
+          overflow: "hidden",
+          marginBottom: 20,
+        }}
+      >
+        <div style={{ height: 4, background: LAB_RED }} />
+        <div style={{ padding: 16 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8 }}>NMI 3DS Test Cards</div>
+          <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>
+            Use valid future expiry and 3-digit CVC. For latest scenarios, use the official NMI testing docs.
+          </div>
+          <a
+            href="https://docs.nmi.com/docs/testing"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: LAB_RED, fontWeight: 700, textDecoration: "none", fontSize: 13 }}
+          >
+            Open NMI test documentation →
+          </a>
+          <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+            {TEST_CARDS.map((card) => (
+              <div
+                key={card.name}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  alignItems: "center",
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  background: "#fafafa",
+                  border: "1px solid #f1f1f1",
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>{card.name}</span>
+                <code style={{ fontSize: 12 }}>{card.number || "See NMI docs"}</code>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
