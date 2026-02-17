@@ -240,12 +240,18 @@ export default function CheckoutPage() {
             </div>
 
             <div style={{ marginTop: 12, fontSize: 12, opacity: 0.75 }}>
-              Approve/decline/error is controlled by the total amount:
-              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-                <li>£10.00 → approve</li>
-                <li>£10.01 → decline</li>
-                <li>£0.00 → error</li>
-              </ul>
+              Use NMI test cards for gateway behavior testing.
+              <br />
+              Card expiry must be a valid future date and CVC must be 3 digits.
+              <br />
+              <a
+                href="https://docs.nmi.com/docs/testing"
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: LAB_RED, fontWeight: 700, textDecoration: "none" }}
+              >
+                View NMI testing cards and scenarios →
+              </a>
             </div>
           </div>
         </div>
