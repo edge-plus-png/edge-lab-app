@@ -3,8 +3,15 @@ import PayClient from "./PayClient";
 
 const LAB_RED = "#DC2626";
 
-export default function PayPage({ params }: { params: { sessionId?: string } }) {
-  const sessionId = params?.sessionId || "";
+type PayPageParams = { sessionId?: string };
+
+export default async function PayPage({
+  params,
+}: {
+  params: PayPageParams | Promise<PayPageParams>;
+}) {
+  const resolvedParams = await Promise.resolve(params);
+  const sessionId = resolvedParams?.sessionId || "";
 
   return (
     <main style={{ minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui", padding: "34px 16px" }}>
