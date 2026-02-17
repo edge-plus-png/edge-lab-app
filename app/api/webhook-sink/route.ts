@@ -2,11 +2,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addSinkItem, clearSinkItems, listSinkItems } from "@/lib/webhookSink";
 
-function requireToken(req: NextRequest) {
-  const token = req.nextUrl.searchParams.get("token") || "";
+function requireToken(req: NextRequest, allowHeaderToken = false) {
+  const queryToken = req.nextUrl.searchParams.get("token") || "";
+  const headerToken = req.headers.get("x-edge-lab-sink-token") || "";
   const required = process.env.EDGE_LAB_SINK_TOKEN || "";
   if (!required) return { ok: false, error: "Server misconfigured: EDGE_LAB_SINK_TOKEN missing" as const };
-  if (!token || token !== required) return { ok: false, error: "Unauthorized" as const };
+  const viaQuery = queryToken && queryToken === required;
+  const viaHeader = allowHeaderToken && headerToken && headerToken === required;
+  if (!viaQuery && !viaHeader) return { ok: false, error: "Unauthorized" as const };
   return { ok: true as const };
 }
 
@@ -15,7 +18,7 @@ function newId() {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = requireToken(req);
+  const auth = requireToken(req, true);
   if (!auth.ok) return NextResponse.json({ ok: false, error: auth.error }, { status: 401 });
 
   let body: any = null;

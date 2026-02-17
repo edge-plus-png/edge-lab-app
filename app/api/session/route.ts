@@ -97,7 +97,8 @@ export async function POST(req: NextRequest) {
   const currency = String(body.currency || body.currency_code || cfg.currency);
   const orderRef = String(body.orderRef || body.reference || "");
   const customer = body.customer || {};
-  const returnUrl = body.returnUrl ? String(body.returnUrl) : "";
+  const requestedReturnUrl = body.returnUrl ? String(body.returnUrl) : "";
+  const returnUrl = requestedReturnUrl || String(cfg.defaultReturnUrl || "");
 
   const max = Number(process.env.EDGE_LAB_MAX_AMOUNT || "50");
 
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required customer fields" }, { status: 400, headers: corsHeaders(req) });
   }
 
-  // Only validate if provided
+  // Validate explicit or default return URL (if configured)
   if (returnUrl) {
     try {
       validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
@@ -149,7 +150,8 @@ export async function POST(req: NextRequest) {
     amount,
     currency,
     orderRef,
-    returnUrl: returnUrl || "",
+    // Keep pay URL payload free of fallback webhook details.
+    returnUrl: requestedReturnUrl || "",
     tokenizationKey: cfg.tokenizationKey,
     customer: {
       firstName: String(customer.firstName),

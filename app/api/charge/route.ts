@@ -74,11 +74,26 @@ function normalizeStatus(resp: Record<string, string>) {
 /**
  * Best-effort webhook POST (never fails the payment)
  */
-async function postReturnUrl(returnUrl: string, payload: any) {
+async function postReturnUrl(returnUrl: string, payload: any, requestHost: string) {
   try {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+
+    // Permit server-side delivery to our internal webhook sink without
+    // exposing sink token via query string.
+    const sinkToken = process.env.EDGE_LAB_SINK_TOKEN || "";
+    const u = new URL(returnUrl);
+    const host = u.host.split(":")[0].toLowerCase();
+    const expectedHost = requestHost.split(":")[0].toLowerCase();
+    const isInternalSink = host === expectedHost && u.pathname === "/api/webhook-sink";
+    if (isInternalSink && sinkToken) {
+      headers["x-edge-lab-sink-token"] = sinkToken;
+    }
+
     await fetch(returnUrl, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     });
   } catch {
@@ -88,6 +103,7 @@ async function postReturnUrl(returnUrl: string, payload: any) {
 
 export async function POST(req: NextRequest) {
   const tenant = resolveTenant(req);
+  const requestHost = req.headers.get("host") || "";
   const cfg = loadClientConfig(tenant);
 
   const body = await req.json().catch(() => ({}));
@@ -249,7 +265,7 @@ export async function POST(req: NextRequest) {
     created_at: new Date().toISOString(),
   };
 
-  if (returnUrl) await postReturnUrl(returnUrl, result);
+  if (returnUrl) await postReturnUrl(returnUrl, result, requestHost);
 
   return NextResponse.json(result, { headers: corsHeaders(req) });
 }
