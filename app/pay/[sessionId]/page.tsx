@@ -1,5 +1,5 @@
 // app/pay/[sessionId]/page.tsx
-import PayClient from "./PayClient";
+import PayClientHost from "./PayClientHost";
 
 const LAB_RED = "#DC2626";
 
@@ -33,7 +33,7 @@ export default async function PayPage({
         <div style={{ borderRadius: 18, background: "#fff", border: "1px solid #eee", boxShadow: "0 10px 28px rgba(0,0,0,0.06)", overflow: "hidden" }}>
           <div style={{ height: 5, background: LAB_RED }} />
           <div style={{ padding: 22 }}>
-            <PayClient />
+            <PayClientHost />
           </div>
         </div>
 
