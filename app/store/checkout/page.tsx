@@ -6,6 +6,19 @@ import type { CartItem } from "../_cart";
 import { cartTotal, loadCart } from "../_cart";
 
 const LAB_RED = "#DC2626";
+const TEST_CARDS: Array<{ label: string; number?: string }> = [
+  { label: "Successful Frictionless", number: "4000000000002701" },
+  { label: "Failed Frictionless", number: "4000000000002925" },
+  { label: "Attempted Frictionless", number: "4000000000002719" },
+  { label: "Unavailable Authentication", number: "4000000000002313" },
+  { label: "Rejected Authentication", number: "4000000000002537" },
+  { label: "Unknown Error", number: "4000000000002990" },
+  { label: "Timeout Error", number: "4000000000002354" },
+  { label: "Successful Step Up", number: "4000000000002503" },
+  { label: "Failed Step Up" },
+  { label: "Unavailable Step Up", number: "4000000000002420" },
+  { label: "Error on Authentication", number: "4000000000002644" },
+];
 
 // This is the “edge hosted checkout” domain (where sessions live + payUrl lives)
 const EDGE_LAB_BASE = "https://demo.edge-lab.uk";
@@ -252,6 +265,18 @@ export default function CheckoutPage() {
               >
                 View NMI testing cards and scenarios →
               </a>
+            </div>
+
+            <div style={{ marginTop: 14, border: "1px solid #eee", borderRadius: 12, padding: 10, background: "#fff" }}>
+              <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 8, color: "#111" }}>3DS Test Cards</div>
+              <div style={{ display: "grid", gap: 6, maxHeight: 220, overflowY: "auto", fontSize: 12 }}>
+                {TEST_CARDS.map((c) => (
+                  <div key={c.label} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ opacity: 0.85 }}>{c.label}</span>
+                    <code style={{ fontSize: 11 }}>{c.number || "See NMI docs"}</code>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
