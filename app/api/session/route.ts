@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
   const currency = String(body.currency || body.currency_code || cfg.currency);
   const orderRef = String(body.orderRef || body.reference || "");
   const customer = body.customer || {};
+  const postalCode = String(customer.postalCode || customer.postcode || "");
   const requestedReturnUrl = body.returnUrl ? String(body.returnUrl) : "";
   const returnUrl = requestedReturnUrl || String(cfg.defaultReturnUrl || "");
 
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing orderRef/reference" }, { status: 400, headers: corsHeaders(req) });
   }
 
-  if (!customer.firstName || !customer.lastName || !customer.email || !customer.postalCode) {
+  if (!customer.firstName || !customer.lastName || !customer.email || !postalCode) {
     return NextResponse.json({ error: "Missing required customer fields" }, { status: 400, headers: corsHeaders(req) });
   }
 
@@ -137,7 +138,7 @@ export async function POST(req: NextRequest) {
       firstName: String(customer.firstName),
       lastName: String(customer.lastName),
       email: String(customer.email),
-      postalCode: String(customer.postalCode),
+      postalCode,
     },
     returnUrl: returnUrl || undefined,
   });
@@ -157,7 +158,7 @@ export async function POST(req: NextRequest) {
       firstName: String(customer.firstName),
       lastName: String(customer.lastName),
       email: String(customer.email),
-      postalCode: String(customer.postalCode),
+      postalCode,
     },
   };
 
