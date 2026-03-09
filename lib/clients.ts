@@ -26,11 +26,13 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
+      "https://staging.anytimebooking.eu",
       "https://staging.anytimebooking.com",
+      "https://anytimebooking.eu",
       "https://anytimebooking.com",
     ],
     // ✅ set this to Anytime’s real webhook endpoint (their staging/production)
-    // defaultReturnUrl: "https://staging.anytimebooking.com/api/edge/webhook",
+    defaultReturnUrl: "https://staging.anytimebooking.eu/edge_plus/callback/",
   },
 
   nuco: {
