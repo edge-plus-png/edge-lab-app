@@ -59,6 +59,10 @@ function base64urlEncode(obj: unknown) {
     .replace(/=+$/g, "");
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Invalid returnUrl";
+}
+
 export async function GET(req: NextRequest) {
   const slug = resolveTenant(req);
   const cfg = loadClientConfig(slug);
@@ -123,8 +127,8 @@ export async function POST(req: NextRequest) {
   if (returnUrl) {
     try {
       validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
-    } catch (e: any) {
-      return NextResponse.json({ error: e?.message || "Invalid returnUrl" }, { status: 400, headers: corsHeaders(req) });
+    } catch (error: unknown) {
+      return NextResponse.json({ error: errorMessage(error) }, { status: 400, headers: corsHeaders(req) });
     }
   }
 
@@ -151,8 +155,7 @@ export async function POST(req: NextRequest) {
     amount,
     currency,
     orderRef,
-    // Keep pay URL payload free of fallback webhook details.
-    returnUrl: requestedReturnUrl || "",
+    returnUrl: returnUrl || "",
     tokenizationKey: cfg.tokenizationKey,
     customer: {
       firstName: String(customer.firstName),

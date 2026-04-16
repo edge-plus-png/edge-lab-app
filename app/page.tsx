@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ARTISIO_STAGING_CALLBACK_URL } from "@/lib/artisio";
 
 const LAB_RED = "#DC2626";
 const TEST_CARDS: Array<{ name: string; number?: string }> = [
@@ -27,13 +28,13 @@ export default function HomePage() {
   const [email, setEmail] = useState("john@example.com");
   const [postalCode, setPostalCode] = useState("SW1A 1AA");
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const t = window.location.hostname.split(".")[0] || "";
     setTenant(t);
     setOrderRef(`ORDER-${Math.floor(Math.random() * 10000)}`);
+    setReturnUrl(t === "artisio" ? ARTISIO_STAGING_CALLBACK_URL : "");
   }, []);
 
   const btnPrimary: React.CSSProperties = {
@@ -54,6 +55,10 @@ export default function HomePage() {
     border: "1px solid #ddd",
     fontSize: 14,
   };
+
+  function errorMessage(error: unknown) {
+    return error instanceof Error ? error.message : "Unexpected error";
+  }
 
   async function create() {
     setError(null);
@@ -79,8 +84,8 @@ export default function HomePage() {
       }
 
       window.location.href = data.payUrl;
-    } catch (e: any) {
-      setError(e?.message || "Unexpected error");
+    } catch (error: unknown) {
+      setError(errorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -213,6 +218,11 @@ export default function HomePage() {
         value={returnUrl}
         onChange={(e) => setReturnUrl(e.target.value)}
       />
+      {isArtisio && (
+        <div style={{ fontSize: 12, opacity: 0.75, marginTop: -4, marginBottom: 12 }}>
+          Artisio lab defaults to the staging callback URL first. Live can be added separately later.
+        </div>
+      )}
 
       <button onClick={create} style={btnPrimary} disabled={busy}>
         {busy ? "Creating session…" : "Create session & go to payment"}

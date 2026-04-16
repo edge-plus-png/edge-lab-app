@@ -3,5 +3,9 @@
   "displayName": "Artisio",
   "currency": "GBP",
   "threeDS": true,
-  "allowedReturnUrls": ["https://localhost:3000"]
+  "allowedReturnUrls": [
+    "https://localhost:3000",
+    "https://api.staging.artisio.co/api/v1/payments/online/paydough/webhook/"
+  ],
+  "defaultReturnUrl": "https://api.staging.artisio.co/api/v1/payments/online/paydough/webhook/"
 }

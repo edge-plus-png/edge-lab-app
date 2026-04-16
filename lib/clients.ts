@@ -1,5 +1,6 @@
 // lib/clients.ts
 import type { ClientConfig } from "./types";
+import { ARTISIO_STAGING_CALLBACK_URL } from "./artisio";
 
 const CLIENTS: Record<string, ClientConfig> = {
   demo: {
@@ -59,10 +60,11 @@ const CLIENTS: Record<string, ClientConfig> = {
     allowedReturnUrlPrefixes: [
       "http://localhost",
       "http://127.0.0.1",
+      ARTISIO_STAGING_CALLBACK_URL,
       "https://artisio.co",
       "https://www.artisio.co",
     ],
-    // defaultReturnUrl: "https://artisio.co/api/edge/webhook",
+    defaultReturnUrl: ARTISIO_STAGING_CALLBACK_URL,
   },
 };
 

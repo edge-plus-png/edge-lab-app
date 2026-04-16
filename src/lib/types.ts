@@ -6,6 +6,7 @@ export type ClientConfig = {
   currency: string;
   threeDS: boolean;
   allowedReturnUrls: string[];
+  defaultReturnUrl?: string;
 
   // Add later (do not commit secrets):
   // tokenizationKey?: string;

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
 import { getSession, getResultBySession } from "@/lib/store";
+import { listCallbackLogsBySession } from "@/lib/callbackLog";
 
 export async function GET(req: NextRequest) {
   const host = req.headers.get("host") || "";
@@ -22,6 +23,7 @@ export async function GET(req: NextRequest) {
   }
 
   const result = getResultBySession(sessionId);
+  const callbackLogs = listCallbackLogsBySession(sessionId);
 
   return NextResponse.json({
     session: {
@@ -42,5 +44,6 @@ export async function GET(req: NextRequest) {
           raw: result.raw ?? null,
         }
       : null,
+    callbackLogs,
   });
 }

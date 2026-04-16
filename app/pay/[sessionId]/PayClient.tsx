@@ -28,6 +28,19 @@ type SessionResponse = {
   };
 };
 
+type PaymentComponentChange = {
+  complete?: boolean;
+  token?: string;
+};
+
+type ErrorWithMessage = {
+  message?: string;
+};
+
+type ThreeDSStartPayload = Parameters<
+  NonNullable<NmiThreeDSecureRef["startThreeDSecure"]>
+>[0];
+
 type ThreeDSCompleteEvent = {
   cardHolderAuth: string;
   cavv: string;
@@ -57,6 +70,10 @@ function decodeP(p: string): SessionResponse | null {
   } catch {
     return null;
   }
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Charge failed";
 }
 
 export default function PayClient() {
@@ -127,6 +144,7 @@ export default function PayClient() {
           orderRef: s.orderRef,
           amount: s.amount,
           currency: s.currency,
+          returnUrl: s.returnUrl,
           paymentToken,
 
           customer: {
@@ -174,8 +192,8 @@ export default function PayClient() {
       // Clear token after completion (safe)
       setPaymentToken("");
       setIsValid(false);
-    } catch (e: any) {
-      setErr(e?.message || "Charge failed");
+    } catch (error: unknown) {
+      setErr(errorMessage(error));
     } finally {
       setIsBusy(false);
     }
@@ -205,7 +223,7 @@ export default function PayClient() {
       country: customer.country || undefined,
       address1: customer.address1 || undefined,
       city: customer.city || undefined,
-    } as any);
+    } as ThreeDSStartPayload);
   }
 
   const showSuccess = status === "approved" && statusMsg;
@@ -313,7 +331,7 @@ export default function PayClient() {
             tokenizationKey={s.tokenizationKey}
             layout="multiLine"
             paymentMethods={["card"]}
-            onChange={(data: any) => {
+            onChange={(data: PaymentComponentChange) => {
               setIsValid(!!data?.complete);
               if (data?.complete && data?.token) setPaymentToken(String(data.token));
             }}
@@ -323,11 +341,11 @@ export default function PayClient() {
             ref={threeDSRef}
             tokenizationKey={s.tokenizationKey}
             modal={true}
-            onFailure={(e: any) => {
+            onFailure={(error: ErrorWithMessage) => {
               setIsBusy(false);
-              setErr(e?.message || "3DS authentication failed");
+              setErr(error?.message || "3DS authentication failed");
             }}
-            onComplete={(result: any) => {
+            onComplete={(result: unknown) => {
               // 3DS done; charge next (submitCharge manages busy true/false too)
               submitCharge(result as ThreeDSCompleteEvent);
             }}
@@ -358,6 +376,17 @@ export default function PayClient() {
       <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
         Payment token is created in-browser by the NMI component, 3DS runs, then the token + 3DS fields are posted server-to-server for processing.
       </div>
+
+      {isDone && (
+        <div style={{ marginTop: 14 }}>
+          <a
+            href={`/result/${encodeURIComponent(s.sessionId)}`}
+            style={{ fontSize: 13, fontWeight: 700, textDecoration: "none", color: "#111" }}
+          >
+            Open payment result and callback log →
+          </a>
+        </div>
+      )}
     </div>
   );
 }

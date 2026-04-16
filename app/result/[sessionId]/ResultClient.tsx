@@ -26,8 +26,25 @@ type ApiResult = {
       cavv?: string;
       threeDsVersion?: string;
     };
-    raw?: any;
+    raw?: unknown;
   };
+  callbackLogs: Array<{
+    id: string;
+    createdAt: number;
+    source: "charge" | "return-url-test" | "result-resend";
+    returnUrl: string;
+    request: {
+      headers: Record<string, string>;
+      body: unknown;
+    };
+    response?: {
+      ok: boolean;
+      status: number;
+      headers: Record<string, string>;
+      body: string;
+    };
+    error?: string;
+  }>;
 };
 
 export default function ResultClient({ sessionId }: { sessionId: string }) {
@@ -75,6 +92,10 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
     fontSize: 14,
   };
 
+  function errorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+  }
+
   async function load() {
     setError(null);
     try {
@@ -87,8 +108,8 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
       // prefill returnUrl if stored on the session
       if (json?.session?.returnUrl && !returnUrl) setReturnUrl(json.session.returnUrl);
-    } catch (e: any) {
-      setError(e?.message || "Failed to load result");
+    } catch (error: unknown) {
+      setError(errorMessage(error, "Failed to load result"));
     }
   }
 
@@ -129,8 +150,8 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       if (!res.ok) throw new Error(json?.error || "Return URL test failed");
 
       setInfo(`Return URL test sent (${json.statusCode || json.status || "OK"})`);
-    } catch (e: any) {
-      setError(e?.message || "Return URL test failed");
+    } catch (error: unknown) {
+      setError(errorMessage(error, "Return URL test failed"));
     } finally {
       setBusy(false);
     }
@@ -164,8 +185,8 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       if (!res.ok) throw new Error(json?.error || "Resend failed");
 
       setInfo(`Result sent (${json.statusCode || "OK"})`);
-    } catch (e: any) {
-      setError(e?.message || "Resend failed");
+    } catch (error: unknown) {
+      setError(errorMessage(error, "Resend failed"));
     } finally {
       setBusy(false);
     }
@@ -173,6 +194,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
 
   const result = data?.result;
   const gw = result?.gateway || {};
+  const callbackLogs = data?.callbackLogs || [];
 
   return (
     <div>
@@ -274,6 +296,54 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
       <p style={{ fontSize: 13, opacity: 0.7, marginTop: 10 }}>
         “Test Return URL” sends a sample payload. “Send/Resend Result” sends the real stored gateway result (ECI/CAVV/3DS version included).
       </p>
+
+      <hr style={{ margin: "18px 0" }} />
+
+      <h3 style={{ margin: "0 0 10px" }}>Callback Delivery Log</h3>
+      {callbackLogs.length === 0 ? (
+        <div style={{ padding: 12, borderRadius: 10, border: "1px solid #e6e6e6", background: "#fafafa", fontSize: 13, opacity: 0.75 }}>
+          No callback deliveries logged for this session yet.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 12 }}>
+          {callbackLogs.map((item) => (
+            <div key={item.id} style={{ border: "1px solid #e6e6e6", borderRadius: 12, background: "#fff", padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+                <div style={{ fontWeight: 700 }}>
+                  {item.source} to {item.returnUrl}
+                </div>
+                <div style={{ fontSize: 12, opacity: 0.7 }}>
+                  {new Date(item.createdAt).toLocaleString()}
+                </div>
+              </div>
+
+              <div style={{ fontSize: 13, marginBottom: 8 }}>
+                {item.error ? (
+                  <span style={{ color: "#b91c1c", fontWeight: 700 }}>Delivery failed: {item.error}</span>
+                ) : (
+                  <span style={{ fontWeight: 700 }}>
+                    Response: {item.response?.status} {item.response?.ok ? "OK" : "Not OK"}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Request body</div>
+                  <pre style={preStyle}>{JSON.stringify(item.request.body, null, 2)}</pre>
+                </div>
+
+                {!item.error && (
+                  <div>
+                    <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Response body</div>
+                    <pre style={preStyle}>{item.response?.body || "Empty response body"}</pre>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -286,3 +356,16 @@ function KV({ label, value }: { label: string; value?: string }) {
     </div>
   );
 }
+
+const preStyle: React.CSSProperties = {
+  margin: 0,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid #ececec",
+  background: "#fafafa",
+  fontSize: 12,
+  lineHeight: "18px",
+  overflowX: "auto",
+  whiteSpace: "pre-wrap",
+  overflowWrap: "anywhere",
+};

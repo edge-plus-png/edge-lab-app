@@ -2,7 +2,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
-import { getSession } from "@/lib/store";
+import { getSession, saveResult } from "@/lib/store";
+import { sendCallback } from "@/lib/callbackDelivery";
+import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 
 /**
  * CORS (optional; useful if demo-store domains call /api/charge from browser)
@@ -71,34 +73,12 @@ function normalizeStatus(resp: Record<string, string>) {
   return "error";
 }
 
-/**
- * Best-effort webhook POST (never fails the payment)
- */
-async function postReturnUrl(returnUrl: string, payload: any, requestHost: string) {
-  try {
-    const headers: Record<string, string> = {
-      "content-type": "application/json",
-    };
+function newId() {
+  return crypto.randomUUID().replace(/-/g, "");
+}
 
-    // Permit server-side delivery to our internal webhook sink without
-    // exposing sink token via query string.
-    const sinkToken = process.env.EDGE_LAB_SINK_TOKEN || "";
-    const u = new URL(returnUrl);
-    const host = u.host.split(":")[0].toLowerCase();
-    const expectedHost = requestHost.split(":")[0].toLowerCase();
-    const isInternalSink = host === expectedHost && u.pathname === "/api/webhook-sink";
-    if (isInternalSink && sinkToken) {
-      headers["x-edge-lab-sink-token"] = sinkToken;
-    }
-
-    await fetch(returnUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    // ignore
-  }
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Invalid returnUrl";
 }
 
 export async function POST(req: NextRequest) {
@@ -106,7 +86,7 @@ export async function POST(req: NextRequest) {
   const requestHost = req.headers.get("host") || "";
   const cfg = loadClientConfig(tenant);
 
-  const body = await req.json().catch(() => ({}));
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   const sessionId = String(body.sessionId || "");
   const paymentToken = String(body.paymentToken || "");
@@ -123,9 +103,13 @@ export async function POST(req: NextRequest) {
   const clientAmount = Number(body.amount);
   const clientCurrency = String(body.currency || "GBP");
   const clientOrderRef = String(body.orderRef || "");
+  const clientReturnUrl = String(body.returnUrl || "");
 
   // Customer fallback (prefer session -> else body.customer)
-  const clientCustomer = body.customer || {};
+  const clientCustomer =
+    typeof body.customer === "object" && body.customer !== null
+      ? (body.customer as Record<string, unknown>)
+      : {};
   const clientFirstName = String(clientCustomer.firstName || "");
   const clientLastName = String(clientCustomer.lastName || "");
   const clientEmail = String(clientCustomer.email || "");
@@ -142,19 +126,19 @@ export async function POST(req: NextRequest) {
   }
 
   // Prefer server-side session (if available)
-  const session: any = getSession(sessionId);
+  const session = getSession(sessionId);
 
   const amount = session?.amount ?? clientAmount;
   const currency = session?.currency ?? clientCurrency;
   const orderRef = session?.orderRef ?? clientOrderRef;
-  const returnUrl = session?.returnUrl || "";
+  const returnUrl = session?.returnUrl || clientReturnUrl;
 
   const firstName = String(session?.customer?.firstName || clientFirstName || "");
   const lastName = String(session?.customer?.lastName || clientLastName || "");
   const email = String(session?.customer?.email || clientEmail || "");
   const postalCode = String(session?.customer?.postalCode || clientPostalCode || "");
-  const address1 = String(session?.customer?.address1 || clientAddress1 || "");
-  const city = String(session?.customer?.city || clientCity || "");
+  const address1 = String(clientAddress1 || "");
+  const city = String(clientCity || "");
   const country = String(session?.customer?.country || clientCountry || "");
 
   if (!amount || amount <= 0 || !orderRef) {
@@ -169,6 +153,17 @@ export async function POST(req: NextRequest) {
       { error: "Missing customer fields (firstName,lastName,email,postalCode)" },
       { status: 400, headers: corsHeaders(req) }
     );
+  }
+
+  if (returnUrl) {
+    try {
+      validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
+    } catch (error: unknown) {
+      return NextResponse.json(
+        { error: errorMessage(error) },
+        { status: 400, headers: corsHeaders(req) }
+      );
+    }
   }
 
   // Pull tenant private key from env
@@ -265,7 +260,43 @@ export async function POST(req: NextRequest) {
     created_at: new Date().toISOString(),
   };
 
-  if (returnUrl) await postReturnUrl(returnUrl, result, requestHost);
+  saveResult({
+    resultId: newId(),
+    sessionId,
+    slug: tenant,
+    status,
+    orderRef,
+    amount: Number(Number(amount).toFixed(2)),
+    currency,
+    gateway: {
+      transactionId: parsed.transactionid || "",
+      responseCode: parsed.response || "",
+      message: parsed.responsetext || "",
+      authCode: parsed.authcode || "",
+      avs: parsed.avsresponse || "",
+      cvv: parsed.cvvresponse || "",
+      eci: parsed.eci || eci,
+      cavv: parsed.cavv || cavv,
+      threeDsVersion:
+        parsed.threeds_version || parsed.three_ds_version || threeDsVersion,
+    },
+    raw: parsed,
+  });
+
+  if (returnUrl) {
+    try {
+      await sendCallback({
+        slug: tenant,
+        source: "charge",
+        sessionId,
+        returnUrl,
+        payload: result,
+        requestHost,
+      });
+    } catch {
+      // ignore callback errors so the payment response still succeeds
+    }
+  }
 
   return NextResponse.json(result, { headers: corsHeaders(req) });
 }
