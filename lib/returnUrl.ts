@@ -1,9 +1,13 @@
-export function validateReturnUrlOrThrow(returnUrl: string, allowedPrefixes: string[]) {
+export function validateAllowlistedUrlOrThrow(
+  value: string,
+  allowedPrefixes: string[],
+  label = "URL"
+) {
   let u: URL;
   try {
-    u = new URL(returnUrl);
+    u = new URL(value);
   } catch {
-    throw new Error("Invalid returnUrl (must be a valid URL)");
+    throw new Error(`Invalid ${label} (must be a valid URL)`);
   }
 
   const isLocal =
@@ -12,9 +16,13 @@ export function validateReturnUrlOrThrow(returnUrl: string, allowedPrefixes: str
     u.hostname.endsWith(".localhost");
 
   if (!isLocal && u.protocol !== "https:") {
-    throw new Error("returnUrl must be HTTPS (except localhost for development)");
+    throw new Error(`${label} must be HTTPS (except localhost for development)`);
   }
 
-  const ok = allowedPrefixes.some((p) => returnUrl.startsWith(p));
-  if (!ok) throw new Error("returnUrl is not allow-listed for this client");
+  const ok = allowedPrefixes.some((p) => value.startsWith(p));
+  if (!ok) throw new Error(`${label} is not allow-listed for this client`);
+}
+
+export function validateReturnUrlOrThrow(returnUrl: string, allowedPrefixes: string[]) {
+  validateAllowlistedUrlOrThrow(returnUrl, allowedPrefixes, "returnUrl");
 }

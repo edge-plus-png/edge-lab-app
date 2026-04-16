@@ -1,5 +1,5 @@
 import { addCallbackLog } from "@/lib/callbackLog";
-import { isArtisioStagingCallbackUrl } from "@/lib/artisio";
+import { isArtisioTrackedCallbackUrl } from "@/lib/artisio";
 
 type CallbackSource = "charge" | "return-url-test" | "result-resend";
 
@@ -17,7 +17,7 @@ function newId() {
 }
 
 function shouldLogCallback(slug: string, returnUrl: string) {
-  return slug === "artisio" && isArtisioStagingCallbackUrl(returnUrl);
+  return slug === "artisio" && isArtisioTrackedCallbackUrl(returnUrl);
 }
 
 function logPrefix(source: CallbackSource) {

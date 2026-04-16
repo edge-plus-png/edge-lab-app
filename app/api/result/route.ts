@@ -28,18 +28,24 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     session: {
       sessionId: session.sessionId,
+      intent: session.intent,
       orderRef: session.orderRef,
       amount: session.amount,
       currency: session.currency,
       returnUrl: session.returnUrl || "",
+      successUrl: session.successUrl || "",
+      failUrl: session.failUrl || "",
+      cancelUrl: session.cancelUrl || "",
       customer: session.customer,
       createdAt: session.createdAt,
     },
     result: result
       ? {
           resultId: result.resultId,
+          intent: result.intent,
           status: result.status,
           createdAt: result.createdAt,
+          verification: result.verification || null,
           gateway: result.gateway || {},
           raw: result.raw ?? null,
         }

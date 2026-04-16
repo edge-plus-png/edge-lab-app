@@ -61,10 +61,12 @@ export async function POST(req: NextRequest) {
     resultId: newId(),
     sessionId,
     slug,
+    intent: session.intent,
     status: approved ? "approved" : "declined",
     orderRef: session.orderRef,
     amount: session.amount,
     currency: session.currency,
+    customer: session.customer,
     gateway: {
       transactionId: parsed.transactionid,
       message: parsed.responsetext,
@@ -74,7 +76,10 @@ export async function POST(req: NextRequest) {
       cvv: parsed.cvvresponse,
       eci: parsed.eci,
       cavv: parsed.cavv,
+      xid: parsed.xid,
       threeDsVersion: parsed.threeds_version,
+      directoryServerId: parsed.directory_server_id,
+      cardholderAuth: parsed.cardholder_auth,
     },
     raw: parsed,
   });

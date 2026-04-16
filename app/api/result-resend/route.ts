@@ -5,6 +5,7 @@ import { loadClientConfig } from "@/lib/clients";
 import { getResultBySession, getSession } from "@/lib/store";
 import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
 import { sendCallback } from "@/lib/callbackDelivery";
+import { buildResultPayload } from "@/lib/resultPayload";
 
 function modeFromHost(host: string) {
   return host.toLowerCase().includes("staging.") ? "test" : "test";
@@ -43,31 +44,34 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = {
-    event: "payment.completed",
-    client: slug,
+    ...buildResultPayload({
+      client: slug,
+      sessionId: result.sessionId,
+      resultId: result.resultId,
+      intent: result.intent,
+      status: result.status,
+      orderRef: result.orderRef,
+      amount: result.amount,
+      currency: result.currency,
+      customer: result.customer || session.customer,
+      gateway: {
+        transaction_id: result.gateway?.transactionId,
+        response_code: result.gateway?.responseCode,
+        message: result.gateway?.message,
+        auth_code: result.gateway?.authCode,
+        avs: result.gateway?.avs,
+        cvv: result.gateway?.cvv,
+        eci: result.gateway?.eci,
+        cavv: result.gateway?.cavv,
+        xid: result.gateway?.xid,
+        three_ds_version: result.gateway?.threeDsVersion,
+        directory_server_id: result.gateway?.directoryServerId,
+        cardholder_auth: result.gateway?.cardholderAuth,
+      },
+      verification: result.verification,
+      createdAt: result.createdAt,
+    }),
     mode: modeFromHost(host),
-    status: result.status,
-
-    session_id: result.sessionId,
-    result_id: result.resultId,
-    reference: result.orderRef,
-
-    amount: result.amount,
-    currency: result.currency,
-
-    gateway: {
-      transaction_id: result.gateway?.transactionId,
-      response_code: result.gateway?.responseCode,
-      message: result.gateway?.message,
-      auth_code: result.gateway?.authCode,
-      avs: result.gateway?.avs,
-      cvv: result.gateway?.cvv,
-      eci: result.gateway?.eci,
-      cavv: result.gateway?.cavv,
-      three_ds_version: result.gateway?.threeDsVersion,
-    },
-
-    created_at: new Date(result.createdAt).toISOString(),
   };
 
   try {

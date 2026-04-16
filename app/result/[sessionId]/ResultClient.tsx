@@ -5,16 +5,29 @@ import { useEffect, useMemo, useState } from "react";
 type ApiResult = {
   session: {
     sessionId: string;
+    intent: "payment" | "card_verification";
     orderRef: string;
     amount: number;
     currency: string;
     returnUrl: string;
+    successUrl: string;
+    failUrl: string;
+    cancelUrl: string;
     createdAt: number;
   };
   result: null | {
     resultId: string;
+    intent: "payment" | "card_verification";
     status: "approved" | "declined" | "error";
     createdAt: number;
+    verification?: {
+      reversed: boolean;
+      reverseType?: "void" | "refund";
+      reverseStatus?: "approved" | "declined" | "error";
+      reverseTransactionId?: string;
+      reverseMessage?: string;
+      reverseResponseCode?: string;
+    } | null;
     gateway: {
       transactionId?: string;
       message?: string;
@@ -24,7 +37,10 @@ type ApiResult = {
       cvv?: string;
       eci?: string;
       cavv?: string;
+      xid?: string;
       threeDsVersion?: string;
+      directoryServerId?: string;
+      cardholderAuth?: string;
     };
     raw?: unknown;
   };
@@ -195,6 +211,7 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
   const result = data?.result;
   const gw = result?.gateway || {};
   const callbackLogs = data?.callbackLogs || [];
+  const isVerification = data?.session?.intent === "card_verification";
 
   return (
     <div>
@@ -220,7 +237,9 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
           </div>
 
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Order</div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>
+              {isVerification ? "Verification" : "Order"}
+            </div>
             <div style={{ fontWeight: 700 }}>
               {data?.session?.orderRef} — {data?.session?.currency} {data?.session?.amount}
             </div>
@@ -239,11 +258,28 @@ export default function ResultClient({ sessionId }: { sessionId: string }) {
             <KV label="3DS Version" value={gw.threeDsVersion} />
           </div>
 
+          {isVerification && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <KV label="Reversed" value={result?.verification?.reversed ? "Yes" : "No"} />
+              <KV label="Reverse Type" value={result?.verification?.reverseType} />
+              <KV label="Reverse Tx" value={result?.verification?.reverseTransactionId} />
+            </div>
+          )}
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
             <KV label="Auth Code" value={gw.authCode} />
             <KV label="AVS" value={gw.avs} />
             <KV label="CVV" value={gw.cvv} />
           </div>
+
+          {isVerification && result?.verification?.reverseMessage && (
+            <div style={{ padding: 10, border: "1px solid #e6e6e6", borderRadius: 10, background: "#fff" }}>
+              <div style={{ fontSize: 12, opacity: 0.65 }}>Reversal Message</div>
+              <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>
+                {result.verification.reverseMessage}
+              </div>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button onClick={load} disabled={busy} style={busy ? { ...btnBase, ...btnDisabled } : btnBase}>

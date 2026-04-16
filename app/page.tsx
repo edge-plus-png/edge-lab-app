@@ -20,9 +20,13 @@ const TEST_CARDS: Array<{ name: string; number?: string }> = [
 
 export default function HomePage() {
   const [tenant, setTenant] = useState<string>("");
+  const [intent, setIntent] = useState<"payment" | "card_verification">("payment");
   const [amount, setAmount] = useState("10.00");
   const [orderRef, setOrderRef] = useState("ORDER-0000");
   const [returnUrl, setReturnUrl] = useState("");
+  const [successUrl, setSuccessUrl] = useState("");
+  const [failUrl, setFailUrl] = useState("");
+  const [cancelUrl, setCancelUrl] = useState("");
   const [firstName, setFirstName] = useState("John");
   const [lastName, setLastName] = useState("Doe");
   const [email, setEmail] = useState("john@example.com");
@@ -36,6 +40,12 @@ export default function HomePage() {
     setOrderRef(`ORDER-${Math.floor(Math.random() * 10000)}`);
     setReturnUrl(t === "artisio" ? ARTISIO_STAGING_CALLBACK_URL : "");
   }, []);
+
+  useEffect(() => {
+    if (intent === "card_verification") {
+      setAmount("1.00");
+    }
+  }, [intent]);
 
   const btnPrimary: React.CSSProperties = {
     background: LAB_RED,
@@ -69,10 +79,14 @@ export default function HomePage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          intent,
           amount: Number(amount),
           currency: "GBP",
           orderRef,
           returnUrl: returnUrl || undefined,
+          successUrl: successUrl || undefined,
+          failUrl: failUrl || undefined,
+          cancelUrl: cancelUrl || undefined,
           customer: { firstName, lastName, email, postalCode },
         }),
       });
@@ -92,6 +106,7 @@ export default function HomePage() {
   }
 
   const isArtisio = tenant === "artisio";
+  const isVerification = intent === "card_verification";
 
   return (
     <main style={{ maxWidth: 980, margin: "40px auto", fontFamily: "system-ui", padding: "0 18px" }}>
@@ -132,10 +147,11 @@ export default function HomePage() {
             edge-lab returns a <b>payUrl</b> — redirect the customer to it.
           </li>
           <li>
-            Customer completes <b>3DS + payment</b>.
+            Customer completes <b>3DS + {isVerification ? "verification" : "payment"}</b>.
           </li>
           <li>
             If a Return URL was provided, edge-lab automatically <b>POSTs the final result</b> to it.
+            {isVerification ? " Approved verification sessions are reversed automatically." : ""}
           </li>
         </ol>
 
@@ -198,9 +214,25 @@ export default function HomePage() {
       </div>
 
       {/* Form */}
+      <h3>Flow</h3>
+      <label>Intent</label>
+      <select
+        style={inputStyle}
+        value={intent}
+        onChange={(e) => setIntent(e.target.value as "payment" | "card_verification")}
+      >
+        <option value="payment">Standard payment</option>
+        <option value="card_verification">Card verification (£1 and reverse)</option>
+      </select>
+
       <h3>Order</h3>
       <label>Amount (GBP)</label>
-      <input style={inputStyle} value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <input
+        style={{ ...inputStyle, background: isVerification ? "#f8fafc" : "#fff" }}
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        readOnly={isVerification}
+      />
 
       <label>{isArtisio ? "Reference" : "Order Ref"}</label>
       <input style={inputStyle} value={orderRef} onChange={(e) => setOrderRef(e.target.value)} />
@@ -220,12 +252,36 @@ export default function HomePage() {
       />
       {isArtisio && (
         <div style={{ fontSize: 12, opacity: 0.75, marginTop: -4, marginBottom: 12 }}>
-          Artisio lab defaults to the staging callback URL first. Live can be added separately later.
+          Artisio lab defaults to the staging callback URL first. The live callback URL is allow-listed separately.
         </div>
       )}
 
+      <h3>Partner Redirects (optional)</h3>
+      <input
+        style={inputStyle}
+        placeholder="https://your-site/success"
+        value={successUrl}
+        onChange={(e) => setSuccessUrl(e.target.value)}
+      />
+      <input
+        style={inputStyle}
+        placeholder="https://your-site/fail"
+        value={failUrl}
+        onChange={(e) => setFailUrl(e.target.value)}
+      />
+      <input
+        style={inputStyle}
+        placeholder="https://your-site/cancel"
+        value={cancelUrl}
+        onChange={(e) => setCancelUrl(e.target.value)}
+      />
+
       <button onClick={create} style={btnPrimary} disabled={busy}>
-        {busy ? "Creating session…" : "Create session & go to payment"}
+        {busy
+          ? "Creating session…"
+          : isVerification
+          ? "Create verification session & go to hosted check"
+          : "Create session & go to payment"}
       </button>
 
       {error && (

@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
 import { createSession, getSession } from "@/lib/store";
-import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
+import { validateAllowlistedUrlOrThrow, validateReturnUrlOrThrow } from "@/lib/returnUrl";
+import type { SessionIntent } from "@/lib/store";
 
 /**
  * CORS
@@ -63,6 +64,10 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Invalid returnUrl";
 }
 
+function resolveIntent(value: unknown): SessionIntent {
+  return value === "card_verification" ? "card_verification" : "payment";
+}
+
 export async function GET(req: NextRequest) {
   const slug = resolveTenant(req);
   const cfg = loadClientConfig(slug);
@@ -80,10 +85,14 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(
     {
       sessionId: session.sessionId ?? sessionId,
+      intent: session.intent,
       amount: session.amount,
       currency: session.currency,
       orderRef: session.orderRef,
       returnUrl: session.returnUrl || "",
+      successUrl: session.successUrl || "",
+      failUrl: session.failUrl || "",
+      cancelUrl: session.cancelUrl || "",
       tokenizationKey: cfg.tokenizationKey,
       customer: session.customer || null,
     },
@@ -100,10 +109,14 @@ export async function POST(req: NextRequest) {
   const amount = Number(body.amount);
   const currency = String(body.currency || body.currency_code || cfg.currency);
   const orderRef = String(body.orderRef || body.reference || "");
+  const intent = resolveIntent(body.intent);
   const customer = body.customer || {};
   const postalCode = String(customer.postalCode || customer.postcode || "");
   const requestedReturnUrl = body.returnUrl ? String(body.returnUrl) : "";
   const returnUrl = requestedReturnUrl || String(cfg.defaultReturnUrl || "");
+  const successUrl = body.successUrl ? String(body.successUrl) : "";
+  const failUrl = body.failUrl ? String(body.failUrl) : "";
+  const cancelUrl = body.cancelUrl ? String(body.cancelUrl) : "";
 
   const max = Number(process.env.EDGE_LAB_MAX_AMOUNT || "50");
 
@@ -113,6 +126,13 @@ export async function POST(req: NextRequest) {
 
   if (amount > max) {
     return NextResponse.json({ error: `Amount exceeds lab limit (£${max}).` }, { status: 400, headers: corsHeaders(req) });
+  }
+
+  if (intent === "card_verification" && Number(amount.toFixed(2)) !== 1) {
+    return NextResponse.json(
+      { error: "Card verification sessions must use an amount of 1.00." },
+      { status: 400, headers: corsHeaders(req) }
+    );
   }
 
   if (!orderRef) {
@@ -132,9 +152,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  for (const [label, value] of [
+    ["successUrl", successUrl],
+    ["failUrl", failUrl],
+    ["cancelUrl", cancelUrl],
+  ] as const) {
+    if (!value) continue;
+    try {
+      validateAllowlistedUrlOrThrow(value, cfg.allowedReturnUrlPrefixes, label);
+    } catch (error: unknown) {
+      return NextResponse.json({ error: errorMessage(error) }, { status: 400, headers: corsHeaders(req) });
+    }
+  }
+
   // Store server-side session (may not be reliable across regions)
   const session = createSession({
     slug,
+    intent,
     amount,
     currency,
     orderRef,
@@ -143,8 +177,14 @@ export async function POST(req: NextRequest) {
       lastName: String(customer.lastName),
       email: String(customer.email),
       postalCode,
+      address1: customer.address1 ? String(customer.address1) : undefined,
+      city: customer.city ? String(customer.city) : undefined,
+      country: customer.country ? String(customer.country) : undefined,
     },
     returnUrl: returnUrl || undefined,
+    successUrl: successUrl || undefined,
+    failUrl: failUrl || undefined,
+    cancelUrl: cancelUrl || undefined,
   });
 
   const sessionId = session.sessionId;
@@ -152,16 +192,23 @@ export async function POST(req: NextRequest) {
   // ✅ Encode everything Pay page needs (no dependency on GET/session storage)
   const payload = {
     sessionId,
+    intent,
     amount,
     currency,
     orderRef,
     returnUrl: returnUrl || "",
+    successUrl,
+    failUrl,
+    cancelUrl,
     tokenizationKey: cfg.tokenizationKey,
     customer: {
       firstName: String(customer.firstName),
       lastName: String(customer.lastName),
       email: String(customer.email),
       postalCode,
+      address1: customer.address1 ? String(customer.address1) : undefined,
+      city: customer.city ? String(customer.city) : undefined,
+      country: customer.country ? String(customer.country) : undefined,
     },
   };
 

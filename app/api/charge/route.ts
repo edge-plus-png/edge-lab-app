@@ -2,9 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
-import { getSession, saveResult } from "@/lib/store";
+import { getSession, saveResult, type PaymentStatus, type SessionIntent } from "@/lib/store";
 import { sendCallback } from "@/lib/callbackDelivery";
-import { validateReturnUrlOrThrow } from "@/lib/returnUrl";
+import { validateAllowlistedUrlOrThrow, validateReturnUrlOrThrow } from "@/lib/returnUrl";
+import { buildResultPayload } from "@/lib/resultPayload";
 
 /**
  * CORS (optional; useful if demo-store domains call /api/charge from browser)
@@ -66,11 +67,78 @@ function parseNmiResponse(text: string): Record<string, string> {
  * response=2 = declined
  * response=3 = error
  */
-function normalizeStatus(resp: Record<string, string>) {
+function normalizeStatus(resp: Record<string, string>): PaymentStatus {
   const code = resp.response;
   if (code === "1") return "approved";
   if (code === "2") return "declined";
   return "error";
+}
+
+function resolveIntent(value: unknown): SessionIntent {
+  return value === "card_verification" ? "card_verification" : "payment";
+}
+
+function isApprovedResponse(resp: Record<string, string>) {
+  return resp.response === "1";
+}
+
+async function postGatewayRequest(form: URLSearchParams) {
+  const nmiRes = await fetch("https://secure.networkmerchants.com/api/transact.php", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+
+  const text = await nmiRes.text();
+  return parseNmiResponse(text);
+}
+
+async function runLinkedGatewayAction(
+  privateKey: string,
+  type: "void" | "refund",
+  transactionId: string,
+  amount?: number
+) {
+  const form = new URLSearchParams();
+  form.set("security_key", privateKey);
+  form.set("type", type);
+  form.set("transactionid", transactionId);
+  if (typeof amount === "number") {
+    form.set("amount", Number(amount).toFixed(2));
+  }
+
+  return postGatewayRequest(form);
+}
+
+async function reverseVerificationCharge(
+  privateKey: string,
+  transactionId: string,
+  amount: number
+) {
+  const voidResult = await runLinkedGatewayAction(privateKey, "void", transactionId);
+  if (isApprovedResponse(voidResult)) {
+    return {
+      reversed: true,
+      reverseType: "void" as const,
+      reverseStatus: normalizeStatus(voidResult),
+      reverseTransactionId: voidResult.transactionid || transactionId,
+      reverseMessage: voidResult.responsetext || "",
+      reverseResponseCode: voidResult.response_code || voidResult.response || "",
+      reverseRaw: voidResult,
+    };
+  }
+
+  const refundResult = await runLinkedGatewayAction(privateKey, "refund", transactionId, amount);
+  return {
+    reversed: isApprovedResponse(refundResult),
+    reverseType: "refund" as const,
+    reverseStatus: normalizeStatus(refundResult),
+    reverseTransactionId: refundResult.transactionid || transactionId,
+    reverseMessage:
+      refundResult.responsetext || voidResult.responsetext || "Automatic reversal failed",
+    reverseResponseCode: refundResult.response_code || refundResult.response || "",
+    reverseRaw: refundResult,
+  };
 }
 
 function newId() {
@@ -103,7 +171,11 @@ export async function POST(req: NextRequest) {
   const clientAmount = Number(body.amount);
   const clientCurrency = String(body.currency || "GBP");
   const clientOrderRef = String(body.orderRef || "");
+  const clientIntent = resolveIntent(body.intent);
   const clientReturnUrl = String(body.returnUrl || "");
+  const clientSuccessUrl = String(body.successUrl || "");
+  const clientFailUrl = String(body.failUrl || "");
+  const clientCancelUrl = String(body.cancelUrl || "");
 
   // Customer fallback (prefer session -> else body.customer)
   const clientCustomer =
@@ -130,20 +202,31 @@ export async function POST(req: NextRequest) {
 
   const amount = session?.amount ?? clientAmount;
   const currency = session?.currency ?? clientCurrency;
+  const intent = session?.intent ?? clientIntent;
   const orderRef = session?.orderRef ?? clientOrderRef;
   const returnUrl = session?.returnUrl || clientReturnUrl;
+  const successUrl = session?.successUrl || clientSuccessUrl;
+  const failUrl = session?.failUrl || clientFailUrl;
+  const cancelUrl = session?.cancelUrl || clientCancelUrl;
 
   const firstName = String(session?.customer?.firstName || clientFirstName || "");
   const lastName = String(session?.customer?.lastName || clientLastName || "");
   const email = String(session?.customer?.email || clientEmail || "");
   const postalCode = String(session?.customer?.postalCode || clientPostalCode || "");
-  const address1 = String(clientAddress1 || "");
-  const city = String(clientCity || "");
+  const address1 = String(session?.customer?.address1 || clientAddress1 || "");
+  const city = String(session?.customer?.city || clientCity || "");
   const country = String(session?.customer?.country || clientCountry || "");
 
   if (!amount || amount <= 0 || !orderRef) {
     return NextResponse.json(
       { error: "Missing amount/orderRef" },
+      { status: 400, headers: corsHeaders(req) }
+    );
+  }
+
+  if (intent === "card_verification" && Number(Number(amount).toFixed(2)) !== 1) {
+    return NextResponse.json(
+      { error: "Card verification sessions must use an amount of 1.00." },
       { status: 400, headers: corsHeaders(req) }
     );
   }
@@ -158,6 +241,22 @@ export async function POST(req: NextRequest) {
   if (returnUrl) {
     try {
       validateReturnUrlOrThrow(returnUrl, cfg.allowedReturnUrlPrefixes);
+    } catch (error: unknown) {
+      return NextResponse.json(
+        { error: errorMessage(error) },
+        { status: 400, headers: corsHeaders(req) }
+      );
+    }
+  }
+
+  for (const [label, value] of [
+    ["successUrl", successUrl],
+    ["failUrl", failUrl],
+    ["cancelUrl", cancelUrl],
+  ] as const) {
+    if (!value) continue;
+    try {
+      validateAllowlistedUrlOrThrow(value, cfg.allowedReturnUrlPrefixes, label);
     } catch (error: unknown) {
       return NextResponse.json(
         { error: errorMessage(error) },
@@ -216,71 +315,98 @@ export async function POST(req: NextRequest) {
   form.set("merchant_defined_field_2", tenant);
   form.set("merchant_defined_field_3", sessionId);
 
-  // NMI endpoint
-  const nmiRes = await fetch("https://secure.networkmerchants.com/api/transact.php", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
-  });
-
-  const text = await nmiRes.text();
-  const parsed = parseNmiResponse(text);
+  const parsed = await postGatewayRequest(form);
   const status = normalizeStatus(parsed);
-
-  const result = {
-    event: "payment.completed",
-    client: tenant,
-    status,
-
-    session_id: sessionId,
-    reference: orderRef,
-    amount: Number(Number(amount).toFixed(2)),
-    currency,
-
-    customer: { firstName, lastName, email, postalCode },
-
-    gateway: {
-      transaction_id: parsed.transactionid || "",
-      response: parsed.response || "",
-      message: parsed.responsetext || "",
-      auth_code: parsed.authcode || "",
-      avs: parsed.avsresponse || "",
-      cvv: parsed.cvvresponse || "",
-
-      // 3DS visibility (what NMI echoes back varies by account/config)
-      eci: parsed.eci || eci,
-      cavv: parsed.cavv || cavv,
-      xid: parsed.xid || xid,
-      three_ds_version:
-        parsed.threeds_version || parsed.three_ds_version || threeDsVersion,
-      directory_server_id: parsed.directory_server_id || directoryServerId,
-      cardholder_auth: parsed.cardholder_auth || cardHolderAuth,
-    },
-
-    created_at: new Date().toISOString(),
+  const approved = status === "approved";
+  const gateway = {
+    transaction_id: parsed.transactionid || "",
+    response: parsed.response || "",
+    response_code: parsed.response_code || "",
+    message: parsed.responsetext || "",
+    auth_code: parsed.authcode || "",
+    avs: parsed.avsresponse || "",
+    cvv: parsed.cvvresponse || "",
+    eci: parsed.eci || eci,
+    cavv: parsed.cavv || cavv,
+    xid: parsed.xid || xid,
+    three_ds_version:
+      parsed.threeds_version || parsed.three_ds_version || threeDsVersion,
+    directory_server_id: parsed.directory_server_id || directoryServerId,
+    cardholder_auth: parsed.cardholder_auth || cardHolderAuth,
   };
+
+  let verification;
+  if (intent === "card_verification" && approved && gateway.transaction_id) {
+    verification = await reverseVerificationCharge(
+      privateKey,
+      gateway.transaction_id,
+      Number(Number(amount).toFixed(2))
+    );
+  } else if (intent === "card_verification") {
+    verification = {
+      reversed: false,
+      reverseStatus: "error" as PaymentStatus,
+      reverseMessage: approved ? "Missing transaction ID for reversal" : "Charge not approved",
+      reverseResponseCode: approved ? "" : parsed.response || "",
+    };
+  }
+
+  const createdAt = Date.now();
+  const roundedAmount = Number(Number(amount).toFixed(2));
+  const customer = { firstName, lastName, email, postalCode, address1, city, country };
+  const result = buildResultPayload({
+    client: tenant,
+    sessionId,
+    intent,
+    status,
+    orderRef,
+    amount: roundedAmount,
+    currency,
+    customer,
+    gateway,
+    verification,
+    createdAt,
+  });
 
   saveResult({
     resultId: newId(),
     sessionId,
     slug: tenant,
+    intent,
     status,
     orderRef,
-    amount: Number(Number(amount).toFixed(2)),
+    amount: roundedAmount,
     currency,
+    customer,
     gateway: {
-      transactionId: parsed.transactionid || "",
-      responseCode: parsed.response || "",
-      message: parsed.responsetext || "",
-      authCode: parsed.authcode || "",
-      avs: parsed.avsresponse || "",
-      cvv: parsed.cvvresponse || "",
-      eci: parsed.eci || eci,
-      cavv: parsed.cavv || cavv,
-      threeDsVersion:
-        parsed.threeds_version || parsed.three_ds_version || threeDsVersion,
+      transactionId: gateway.transaction_id,
+      responseCode: gateway.response_code || gateway.response,
+      message: gateway.message,
+      authCode: gateway.auth_code,
+      avs: gateway.avs,
+      cvv: gateway.cvv,
+      eci: gateway.eci,
+      cavv: gateway.cavv,
+      xid: gateway.xid,
+      threeDsVersion: gateway.three_ds_version,
+      directoryServerId: gateway.directory_server_id,
+      cardholderAuth: gateway.cardholder_auth,
     },
-    raw: parsed,
+    verification: verification
+      ? {
+          reversed: verification.reversed,
+          reverseType: verification.reverseType,
+          reverseStatus: verification.reverseStatus,
+          reverseTransactionId: verification.reverseTransactionId,
+          reverseMessage: verification.reverseMessage,
+          reverseResponseCode: verification.reverseResponseCode,
+        }
+      : undefined,
+    raw: {
+      charge: parsed,
+      verificationReverse: verification?.reverseRaw,
+      redirects: { successUrl, failUrl, cancelUrl },
+    },
   });
 
   if (returnUrl) {

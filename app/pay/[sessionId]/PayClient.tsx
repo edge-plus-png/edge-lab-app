@@ -1,7 +1,7 @@
 // app/pay/[sessionId]/PayClient.tsx
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 
 import {
@@ -12,10 +12,14 @@ import {
 
 type SessionResponse = {
   sessionId: string;
+  intent: "payment" | "card_verification";
   amount: number;
   currency: string;
   orderRef: string;
   returnUrl: string;
+  successUrl?: string;
+  failUrl?: string;
+  cancelUrl?: string;
   tokenizationKey: string;
   customer?: {
     firstName?: string;
@@ -66,7 +70,10 @@ function decodeP(p: string): SessionResponse | null {
     const json = atob(b64);
     const data = safeJsonParse<SessionResponse>(json);
     if (!data?.sessionId || !data?.tokenizationKey) return null;
-    return data;
+    return {
+      ...data,
+      intent: data.intent === "card_verification" ? "card_verification" : "payment",
+    };
   } catch {
     return null;
   }
@@ -74,6 +81,10 @@ function decodeP(p: string): SessionResponse | null {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Charge failed";
+}
+
+function resolveThreeDSFailureStatus(message: string | undefined) {
+  return message?.toLowerCase().includes("cancel") ? "cancelled" : "error";
 }
 
 export default function PayClient() {
@@ -100,6 +111,15 @@ export default function PayClient() {
 
   const [isBusy, setIsBusy] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  const [redirectTarget, setRedirectTarget] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!redirectTarget) return;
+    const timer = window.setTimeout(() => {
+      window.location.href = redirectTarget;
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [redirectTarget]);
 
   if (!session) {
     return (
@@ -124,10 +144,37 @@ export default function PayClient() {
   const s = session;
 
   const customer = s.customer || {};
+  const isVerification = s.intent === "card_verification";
   const firstName = String(customer.firstName || "");
   const lastName = String(customer.lastName || "");
   const email = String(customer.email || "");
   const postalCode = String(customer.postalCode || "");
+
+  function schedulePartnerRedirect(
+    baseUrl: string | undefined,
+    status: "approved" | "declined" | "error" | "cancelled",
+    extras?: Record<string, string>
+  ) {
+    if (!baseUrl) return;
+
+    try {
+      const u = new URL(baseUrl);
+      u.searchParams.set("sessionId", s.sessionId);
+      u.searchParams.set("reference", s.orderRef);
+      u.searchParams.set("orderRef", s.orderRef);
+      u.searchParams.set("intent", s.intent);
+      u.searchParams.set("status", status);
+
+      for (const [key, value] of Object.entries(extras || {})) {
+        if (!value) continue;
+        u.searchParams.set(key, value);
+      }
+
+      setRedirectTarget(u.toString());
+    } catch {
+      // ignore malformed redirect URLs after server validation
+    }
+  }
 
   async function submitCharge(threeDS: ThreeDSCompleteEvent) {
     setErr(null);
@@ -170,6 +217,9 @@ export default function PayClient() {
 
       if (!res.ok) {
         setErr(json?.error || "Charge failed");
+        schedulePartnerRedirect(s.failUrl, "error", {
+          message: json?.error || "Charge failed",
+        });
         return;
       }
 
@@ -182,12 +232,31 @@ export default function PayClient() {
 
       const tx = json?.gateway?.transaction_id || json?.nmi?.transactionid || "n/a";
       const eciOut = json?.gateway?.eci || "—";
+      const reversed =
+        json?.intent === "card_verification"
+          ? json?.verification?.reversed
+            ? `, reversed via ${json?.verification?.reverse_type || "reversal"}`
+            : ", reversal pending/manual attention needed"
+          : "";
 
       setStatus(st);
-      setStatusMsg(`${st} (tx=${tx}, eci=${eciOut})`);
+      setStatusMsg(`${st} (tx=${tx}, eci=${eciOut}${reversed})`);
 
       // If you only want to hide card fields on APPROVED, change to: if (st === "approved") setIsDone(true)
       setIsDone(true);
+
+      if (st === "approved") {
+        schedulePartnerRedirect(s.successUrl, "approved", {
+          transactionId: json?.gateway?.transaction_id || "",
+          reversed: json?.verification?.reversed ? "true" : "false",
+          reverseType: json?.verification?.reverse_type || "",
+        });
+      } else {
+        schedulePartnerRedirect(s.failUrl, st, {
+          transactionId: json?.gateway?.transaction_id || "",
+          message: json?.gateway?.message || "",
+        });
+      }
 
       // Clear token after completion (safe)
       setPaymentToken("");
@@ -279,7 +348,7 @@ export default function PayClient() {
       )}
 
       <div style={{ fontWeight: 900, marginBottom: 10 }}>
-        Order: {s.orderRef} — {s.currency} {Number(s.amount).toFixed(2)}
+        {isVerification ? "Verification" : "Order"}: {s.orderRef} — {s.currency} {Number(s.amount).toFixed(2)}
       </div>
 
       {err && (
@@ -324,6 +393,20 @@ export default function PayClient() {
         </div>
       )}
 
+      {redirectTarget && (
+        <div
+          style={{
+            padding: 12,
+            marginBottom: 12,
+            background: "#eff6ff",
+            borderRadius: 12,
+            border: "1px solid #bfdbfe",
+          }}
+        >
+          Redirecting back to the partner platform…
+        </div>
+      )}
+
       {/* Hide the card form once done */}
       {!isDone && (
         <>
@@ -343,7 +426,14 @@ export default function PayClient() {
             modal={true}
             onFailure={(error: ErrorWithMessage) => {
               setIsBusy(false);
-              setErr(error?.message || "3DS authentication failed");
+              const message = error?.message || "3DS authentication failed";
+              const failureStatus = resolveThreeDSFailureStatus(message);
+              setErr(message);
+              schedulePartnerRedirect(
+                failureStatus === "cancelled" ? s.cancelUrl || s.failUrl : s.failUrl,
+                failureStatus,
+                { message }
+              );
             }}
             onComplete={(result: unknown) => {
               // 3DS done; charge next (submitCharge manages busy true/false too)
@@ -368,7 +458,7 @@ export default function PayClient() {
               opacity: !isValid || !paymentToken || isBusy ? 0.6 : 1,
             }}
           >
-            Pay with 3D Secure
+            {isVerification ? "Verify card with 3D Secure" : "Pay with 3D Secure"}
           </button>
         </>
       )}
