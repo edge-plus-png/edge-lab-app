@@ -6,7 +6,10 @@
   "allowedReturnUrls": [
     "https://localhost:3000",
     "https://api.staging.artisio.co/api/v1/payments/online/paydough/webhook/",
-    "https://api.artisio.co/api/v1/payments/online/paydough/webhook/"
+    "https://api.artisio.co/api/v1/payments/online/paydough/webhook/",
+    "https://staging.artisio.co",
+    "https://artisio.co",
+    "https://www.artisio.co"
   ],
   "defaultReturnUrl": "https://api.staging.artisio.co/api/v1/payments/online/paydough/webhook/"
 }

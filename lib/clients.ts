@@ -65,6 +65,7 @@ const CLIENTS: Record<string, ClientConfig> = {
       "http://127.0.0.1",
       ARTISIO_STAGING_CALLBACK_URL,
       ARTISIO_LIVE_CALLBACK_URL,
+      "https://staging.artisio.co",
       "https://artisio.co",
       "https://www.artisio.co",
     ],
