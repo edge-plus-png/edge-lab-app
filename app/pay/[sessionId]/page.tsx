@@ -8,7 +8,7 @@ type PayPageParams = { sessionId?: string };
 export default async function PayPage({
   params,
 }: {
-  params: PayPageParams | Promise<PayPageParams>;
+  params: Promise<PayPageParams>;
 }) {
   const resolvedParams = await Promise.resolve(params);
   const sessionId = resolvedParams?.sessionId || "";

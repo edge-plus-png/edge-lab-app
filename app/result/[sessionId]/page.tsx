@@ -2,8 +2,8 @@ import ResultClient from "./ResultClient";
 
 const LAB_RED = "#DC2626";
 
-export default function ResultPage({ params }: { params: { sessionId: string } }) {
-  const { sessionId } = params;
+export default async function ResultPage({ params }: { params: Promise<{ sessionId: string }> }) {
+  const { sessionId } = await params;
 
   return (
     <main
