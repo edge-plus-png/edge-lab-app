@@ -36,6 +36,17 @@ Dependencies: reachable signed Pay v1 configuration/routes/session/status/link/o
 
 ## Opayo handover mapping
 
+Update for the service-owned collection candidate: the user reconfirmed
+`TxType=PAYMENT`, `AccountType=M`, reference `MOTO-2026-09-08-9999`, amount `49.99 GBP`
+and supplied billing/delivery fields. Map these to the one-off MOTO action,
+`source.reference`, `amountMinor: 4999`, `currency: "GBP"`, and genuine supplied
+`customer.billingAddress` / `customer.shippingAddress` values. The sample
+NotificationURL is a placeholder and must not be installed as a receiver. Use the
+configured signed `/api/pay-lab/callback` endpoint. No customer values are fabricated.
+The newer public collection flow returns a service-owned staffUrl/embedUrl; the
+older lab-owned URL description below is historical. See
+[the current partner guide](reference-partner-collection.md).
+
 The two user-provided images describe Anytime's existing server integration; they are requirements evidence, not instructions to use Opayo endpoints or a guarantee of wire compatibility.
 
 | Existing concept | GetEdge Pay equivalent |

@@ -4,6 +4,19 @@ This candidate extends the existing `/collect` lab. The service implementation i
 
 ## Configuration and migration
 
+Staging preparation on 28 September found the existing `edge-lab-app` project has
+no `PAY_LAB_DATABASE_URL`, `PAY_LAB_CONNECTIONS` or new partner signing/staff secrets.
+Its legacy direct-NMI credentials are not a substitute. The candidate review branch
+does not auto-deploy; provision a separate staging host and database, apply the
+normal lab schema migration, and install configuration before deploying the matching
+service/partner release. Existing shared production aliases must remain unchanged.
+
+The supplied Opayo example maps `PAYMENT` / `M` to one-off MOTO,
+`MOTO-2026-09-08-9999` to the saved source reference and `49.99 GBP` to 4999 minor
+units in GBP. Preserve the actual supplied billing/delivery fields in the public
+customer shape; never copy a missing address or invent a name. The sample
+NotificationURL is a placeholder, not an enrolled callback endpoint.
+
 Use the existing `PAY_LAB_CONNECTIONS` catalog and secret-store references from `docs/anytime-collection-lab.md`. Add optional `staffCollection` to each independently configured connection:
 
 ```js
