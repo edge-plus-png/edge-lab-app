@@ -5,23 +5,34 @@ let pool: Pool;
 export function database() {
   if (!process.env.PAY_LAB_DATABASE_URL)
     throw new LabError("The collection database is not configured.", 503);
-  return (pool ??= new Pool({
-    connectionString: process.env.PAY_LAB_DATABASE_URL,
-    max: 5,
-  }));
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.PAY_LAB_DATABASE_URL,
+      max: 5,
+    });
+    // pg removes the failed idle client; handle its event without logging secrets.
+    pool.on("error", () => console.error("pay_lab_idle_database_error"));
+  }
+  return pool;
 }
 export async function transaction<T>(fn: (db: PoolClient) => Promise<T>) {
   const db = await database().connect();
+  let discardClient = false;
   try {
     await db.query("BEGIN");
     const v = await fn(db);
     await db.query("COMMIT");
     return v;
   } catch (e) {
-    await db.query("ROLLBACK");
+    try {
+      await db.query("ROLLBACK");
+    } catch {
+      // Never reuse a client with unknown transaction state or mask the first error.
+      discardClient = true;
+    }
     throw e;
   } finally {
-    db.release();
+    db.release(discardClient);
   }
 }
 export type RecordRow = {

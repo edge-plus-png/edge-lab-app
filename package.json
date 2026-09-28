@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:pay-lab": "node --import tsx --test tests/pay-lab/recovery.test.ts",
+    "test:pay-lab": "node --import tsx --test tests/pay-lab/db.test.ts tests/pay-lab/recovery.test.ts",
     "db:pay-lab": "node --import tsx scripts/pay-lab-migrate.ts"
   },
   "dependencies": {
