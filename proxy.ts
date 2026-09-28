@@ -1,4 +1,5 @@
 // proxy.ts
+import { authorized, getConfig } from "./lib/pay-lab/config";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -6,7 +7,12 @@ function getTenantFromHost(hostHeader: string) {
   const host = (hostHeader || "").split(":")[0].toLowerCase();
 
   // Local dev
-  if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) return "demo";
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".localhost")
+  )
+    return "demo";
 
   // Vercel preview/prod default domains
   if (host.endsWith(".vercel.app")) return "demo";
@@ -22,7 +28,13 @@ function getTenantFromHost(hostHeader: string) {
   return sub;
 }
 
-const ALLOWED_TENANTS = new Set(["demo", "anytime", "nuco", "prismpay", "artisio"]);
+const ALLOWED_TENANTS = new Set([
+  "demo",
+  "anytime",
+  "nuco",
+  "prismpay",
+  "artisio",
+]);
 
 function isStaticAsset(path: string) {
   return /\.[a-z0-9]+$/i.test(path);
@@ -35,6 +47,25 @@ function isStaticAsset(path: string) {
  */
 export default function proxy(req: NextRequest) {
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
+  if (req.nextUrl.pathname === "/collect") {
+    try {
+      const collection = getConfig(req.headers.get("host"));
+      if (!authorized(collection, req.headers))
+        return new NextResponse(
+          "Staff sign-in is required for the staging collection lab.",
+          {
+            status: 401,
+            headers: {
+              "WWW-Authenticate":
+                'Basic realm="GetEdge Pay staging lab", charset="UTF-8"',
+              "Cache-Control": "no-store",
+            },
+          },
+        );
+    } catch {
+      /* The page displays the configuration gate; APIs remain closed. */
+    }
+  }
   const slug = getTenantFromHost(host);
   const tenant = ALLOWED_TENANTS.has(slug) ? slug : "demo";
 

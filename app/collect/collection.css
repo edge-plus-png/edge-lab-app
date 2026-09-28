@@ -1,0 +1,243 @@
+.pay-lab {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 32px 24px 60px;
+  color: #20242a;
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.55;
+}
+.pay-lab * {
+  box-sizing: border-box;
+}
+.pay-lab header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid #e1e5e8;
+  padding-bottom: 24px;
+}
+.pay-lab header img {
+  width: 132px;
+  height: auto;
+}
+.pay-lab header span,
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #646b73;
+}
+.lab-intro {
+  padding: 42px 0 28px;
+  max-width: 620px;
+}
+.pay-lab h1 {
+  font-size: clamp(32px, 5vw, 48px);
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+  margin: 12px 0 18px;
+}
+.pay-lab h2 {
+  font-size: 25px;
+  line-height: 1.2;
+  margin: 18px 0 12px;
+}
+.pay-lab h3 {
+  font-size: 18px;
+}
+.pay-lab p {
+  color: #555e68;
+}
+.pay-lab a {
+  color: #a82020;
+  text-underline-offset: 4px;
+}
+.lab-connection {
+  display: grid;
+  gap: 6px;
+  background: #f3f6f5;
+  border: 1px solid #dbe5df;
+  padding: 20px;
+  border-radius: 14px;
+  font-size: 14px;
+  margin-bottom: 24px;
+  overflow-wrap: anywhere;
+}
+.lab-connection span {
+  color: #516057;
+}
+.lab-card {
+  background: #fff;
+  border: 1px solid #e0e3e7;
+  padding: 28px;
+  border-radius: 18px;
+  box-shadow: 0 8px 32px #18212a06;
+}
+.lab-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.pay-lab label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 14px 0;
+}
+.pay-lab input,
+.pay-lab select {
+  display: block;
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid #cbd1d7;
+  border-radius: 8px;
+  background: #fff;
+  color: #222;
+  font: inherit;
+  margin-top: 7px;
+  min-width: 0;
+}
+.pay-lab input:focus,
+.pay-lab select:focus {
+  outline: 2px solid #ad3030;
+  outline-offset: 2px;
+}
+.lab-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.pay-lab button {
+  border: 1px solid #bc2828;
+  border-radius: 9px;
+  padding: 12px 18px;
+  background: #bc2828;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+}
+.pay-lab button.secondary {
+  background: white;
+  color: #333;
+  border-color: #cbd1d7;
+}
+.pay-lab button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pay-lab details {
+  padding: 12px 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.pay-lab summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.pay-lab form > button {
+  margin-top: 20px;
+}
+.lab-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.lab-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.lab-choices button {
+  text-align: left;
+  padding: 22px;
+}
+.lab-choices span,
+.lab-status span {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  margin-top: 6px;
+}
+.lab-status {
+  border-left: 3px solid #718178;
+  background: #f4f6f5;
+  padding: 16px;
+  margin: 24px 0;
+}
+.lab-error {
+  background: #fff1ee;
+  border: 1px solid #e8bbb0;
+  color: #852323;
+  padding: 18px;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+.lab-error button {
+  display: block;
+  margin-top: 14px;
+}
+.lab-link {
+  padding: 12px 0;
+}
+.secure-field {
+  height: 48px;
+  border: 1px solid #cbd1d7;
+  border-radius: 8px;
+  margin-top: 8px;
+  padding: 10px;
+}
+.pay-lab dd {
+  margin: 0 0 14px;
+  overflow-wrap: anywhere;
+}
+.pay-lab dt {
+  font-weight: 600;
+}
+.pay-lab footer {
+  font-size: 12px;
+  color: #69717a;
+  padding-top: 28px;
+  line-height: 1.8;
+}
+@media (max-width: 600px) {
+  .pay-lab {
+    padding: 20px 16px;
+  }
+  .pay-lab header {
+    align-items: flex-start;
+  }
+  .pay-lab header span {
+    max-width: 140px;
+    text-align: right;
+  }
+  .lab-card {
+    padding: 18px;
+  }
+  .lab-grid,
+  .lab-choices {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .lab-choices {
+    gap: 12px;
+  }
+  .lab-tabs button {
+    flex: 1;
+    padding: 10px;
+  }
+  .lab-intro {
+    padding-top: 28px;
+  }
+}
+
+body:has(.pay-lab) {
+  background: #fff;
+  color: #20242a;
+  color-scheme: light;
+}

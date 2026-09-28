@@ -1,0 +1,23 @@
+[
+  {
+    "id": "replace-with-connection-name",
+    "name": "Anytime Booking staging",
+    "hosts": ["anytime.edge-lab.uk"],
+    "origin": "https://replace-with-pay-staging-origin.example",
+    "integrationId": "replace-from-portal",
+    "merchantId": "replace-from-portal",
+    "pairingId": "replace-from-portal",
+    "environment": "staging",
+    "sourceId": "replace-from-verified-source",
+    "sourceType": "replace-from-verified-source",
+    "signingSecretEnv": "ANYTIME_PAY_LAB_SIGNING_SECRET",
+    "staffPasswordEnv": "ANYTIME_PAY_LAB_ACCESS_PASSWORD",
+    "staffUser": "replace-with-lab-operator",
+    "routeRefs": ["replace-with-granted-ecom-ref", "replace-with-granted-moto-ref"],
+    "callbackUrl": "https://anytime.edge-lab.uk/api/pay-lab/callback",
+    "returnUrls": ["https://anytime.edge-lab.uk/collect"],
+    "collectScriptUrl": "https://secure.nmi.com/token/Collect.js",
+    "providerTestModeConfirmed": false,
+    "sample": {"reference": "EDITABLE-BOOKING", "amount": "12.50", "currency": "GBP", "sessionSeconds": 1800}
+  }
+]

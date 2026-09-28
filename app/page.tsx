@@ -126,6 +126,8 @@ export default function HomePage() {
         </div>
       </div>
 
+      <p style={{ marginBottom: 20 }}><a href="/collect" style={{ color: LAB_RED, fontWeight: 700 }}>GetEdge Pay lab: staff collection &amp; customer checkout →</a></p>
+
       {/* How it works */}
       <div style={{
         padding: 16,
