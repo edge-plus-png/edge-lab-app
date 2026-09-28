@@ -4,7 +4,7 @@ const https = z.url().refine((v) => {
   const u = new URL(v);
   return u.protocol === "https:" && !u.username && !u.password && !u.hash;
 }, "Public HTTPS URL required");
-const configSchema = z
+export const configSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1),

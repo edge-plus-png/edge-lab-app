@@ -17,7 +17,21 @@ CREATE TABLE IF NOT EXISTS pay_lab_receipts (
 CREATE TABLE IF NOT EXISTS pay_lab_audit (
  id bigserial PRIMARY KEY,connection text NOT NULL,booking_id uuid NOT NULL,actor text NOT NULL,
  action text NOT NULL,created_at timestamptz NOT NULL DEFAULT now()
-);`);
+);
+CREATE TABLE IF NOT EXISTS pay_lab_external_requests (
+ source text NOT NULL, connection text NOT NULL, booking_id uuid NOT NULL,
+ request_key text NOT NULL, obligation_id text NOT NULL, request jsonb NOT NULL,
+ source_config jsonb NOT NULL, route_ref text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(source,request_key), UNIQUE(source,obligation_id), UNIQUE(connection,booking_id)
+);
+CREATE TABLE IF NOT EXISTS pay_lab_source_outbox (
+ event_id uuid PRIMARY KEY, source text NOT NULL, connection text NOT NULL, booking_id uuid NOT NULL,
+ revision integer NOT NULL, body text NOT NULL, destination text NOT NULL, policy jsonb NOT NULL,
+ attempts integer NOT NULL DEFAULT 0, next_at timestamptz NOT NULL DEFAULT now(),
+ lease_until timestamptz, claim uuid, delivered_at timestamptz, exhausted_at timestamptz, last_error text,
+ UNIQUE(connection,booking_id,revision)
+);
+CREATE INDEX IF NOT EXISTS pay_lab_source_outbox_due ON pay_lab_source_outbox(next_at) WHERE delivered_at IS NULL AND exhausted_at IS NULL;`);
   await database().end();
   console.log("GetEdge Pay lab migration complete");
 }

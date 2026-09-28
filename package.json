@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:pay-lab": "node --import tsx --test tests/pay-lab/db.test.ts tests/pay-lab/recovery.test.ts",
-    "db:pay-lab": "node --import tsx scripts/pay-lab-migrate.ts"
+    "db:pay-lab": "node --import tsx scripts/pay-lab-migrate.ts",
+    "test:session-gateway": "node --import tsx --test tests/session-gateway/*.test.ts",
+    "worker:session-gateway": "node scripts/session-gateway-worker.mjs"
   },
   "dependencies": {
     "@nmipayments/nmi-pay-react": "1.0.0",

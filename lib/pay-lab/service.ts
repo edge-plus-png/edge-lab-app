@@ -1,3 +1,4 @@
+import { enqueue } from "../session-gateway/outbox";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Config, LabError, scope } from "./config";
@@ -127,6 +128,7 @@ async function apply(c: Config, id: string, value: unknown) {
         "UPDATE pay_lab_bookings SET snapshot=$3 WHERE connection=$1 AND id=$2",
         [c.id, id, s],
       );
+      await enqueue(db, c.id, id, s);
     } else if (
       s.revision === r.snapshot.revision &&
       canonical({ ...s, sessionState: undefined }) !== canonical({ ...r.snapshot, sessionState: undefined })
@@ -136,13 +138,15 @@ async function apply(c: Config, id: string, value: unknown) {
   });
 }
 export async function launch(c: Config, id: string, routeRef: string) {
-  if (!c.providerTestModeConfirmed)
+  const saved = await getRecord(c.id, id);
+  if (!saved.request && !c.providerTestModeConfirmed)
     throw new LabError(
       "A verified provider test-mode configuration is required before creating payment sessions.",
       409,
     );
-  const config = await settings(c);
-  const route = config.routes.find((r) => r.ref === routeRef);
+  const config = saved.request ? null : await settings(c);
+  const route = saved.request ? saved.route : config!.routes.find((r) => r.ref === routeRef);
+  if (route && route.ref !== routeRef) throw new LabError("Saved route does not match the requested route.",409);
   if (!route) throw new LabError("This payment route is not granted.", 403);
   const r = await transaction(async (db) => {
     const r = await record(db, c.id, id);
@@ -345,6 +349,7 @@ export async function receive(c: Config, raw: string, headers: Headers) {
       "INSERT INTO pay_lab_receipts(connection,event_id,body_hash,booking_id) VALUES($1,$2,$3,$4)",
       [c.id, event.eventId, hash, id],
     );
+    if (!r.snapshot || s.revision >= r.snapshot.revision) await enqueue(db, c.id, id, s);
     await db.query(
       "UPDATE pay_lab_bookings SET callback_count=callback_count+1,snapshot=$3 WHERE connection=$1 AND id=$2",
       [

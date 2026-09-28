@@ -7,6 +7,11 @@ export const routeSchema = z.object({
   presentation: z.enum(["hosted_customer", "operator_card"]),
 });
 export type Route = z.infer<typeof routeSchema>;
+const addressSchema = z.object({
+  address1:z.string().trim().max(160).optional(), address2:z.string().trim().max(160).optional(),
+  city:z.string().trim().max(120).optional(), state:z.string().trim().max(120).optional(),
+  postcode:z.string().trim().max(32).optional(), country:z.string().regex(/^[A-Z]{2}$/).optional(),
+}).strict();
 export const requestSchema = z
   .object({
     id: z.string().uuid(),
@@ -17,6 +22,10 @@ export const requestSchema = z
     description: z.string().max(500).optional(),
     customer: z
       .object({
+        customerName:z.string().trim().max(160).optional(),
+        businessName:z.string().trim().max(160).optional(),
+        phone:z.string().trim().max(40).optional(),
+        billingAddress:addressSchema.optional(), shippingAddress:addressSchema.optional(),
         firstName: z.string().max(80).optional(),
         lastName: z.string().max(80).optional(),
         email: z.union([z.literal(""), z.email()]).optional(),
