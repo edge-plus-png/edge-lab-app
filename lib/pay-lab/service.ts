@@ -34,6 +34,7 @@ export async function settings(c: Config) {
     );
   return {
     name: c.name,
+    staffCollectionConfigured: Boolean(c.staffCollection),
     routes,
     callbackUrl: c.callbackUrl,
     returnUrls: c.returnUrls,
@@ -92,19 +93,23 @@ export function canonical(value: unknown): string {
 }
 export function validateSnapshot(c: Config, r: RecordRow, value: unknown) {
   const s = snapshotSchema.parse(value);
+  // Staff selection occurs at Pay. Accept only a route in the saved immutable
+  // collection request, then freeze it with the first verified payment snapshot.
+  const choices = (r.request as { routes?: Record<string,string> } | null)?.routes;
+  const expectedRoute = r.route ?? r.snapshot?.route ?? (choices && choices[s.route.channel === "MOTO" ? "telephone_payment" : "payment_link"] === s.route.ref ? s.route : null);
   for (const [key, expected] of Object.entries(scope(c)))
     if (s[key as keyof Snapshot] !== expected)
       throw new LabError("Payment scope mismatch.", 409);
   if (
-    !r.route ||
+    !expectedRoute ||
     s.source.id !== c.sourceId ||
     s.source.type !== c.sourceType ||
     s.source.reference !== r.booking.reference ||
     s.source.obligationId !== r.id ||
     s.amountMinor !== minorUnits(r.booking.amount) ||
     s.currency !== r.booking.currency ||
-    s.route.ref !== r.route.ref ||
-    s.route.channel !== r.route.channel ||
+    s.route.ref !== expectedRoute.ref ||
+    s.route.channel !== expectedRoute.channel ||
     s.route.currency !== r.booking.currency ||
     Date.parse(s.expiresAt) !== Date.parse(r.booking.expiresAt) ||
     (r.snapshot &&
@@ -124,7 +129,7 @@ async function apply(c: Config, id: string, value: unknown) {
       );
     } else if (
       s.revision === r.snapshot.revision &&
-      canonical(s) !== canonical(r.snapshot)
+      canonical({ ...s, sessionState: undefined }) !== canonical({ ...r.snapshot, sessionState: undefined })
     )
       throw new LabError("Conflicting payment revision.", 409);
     return record(db, c.id, id);
@@ -141,6 +146,7 @@ export async function launch(c: Config, id: string, routeRef: string) {
   if (!route) throw new LabError("This payment route is not granted.", 403);
   const r = await transaction(async (db) => {
     const r = await record(db, c.id, id);
+    if ((r.request as { routes?: unknown } | null)?.routes) throw new LabError("Resume this booking through its hosted staff collection.", 409);
     if (r.route && r.route.ref !== route.ref)
       throw new LabError(
         "This booking already has a payment route. Resolve its existing payment before changing collection method.",
@@ -166,6 +172,7 @@ export async function launch(c: Config, id: string, routeRef: string) {
           ? { description: r.booking.description }
           : {}),
         ...(r.booking.customer ? { customer: r.booking.customer } : {}),
+        ...(r.booking.customerCollection ? { customerCollection: r.booking.customerCollection } : {}),
         ...(r.booking.returnUrl ? { returnUrl: r.booking.returnUrl } : {}),
       };
       await db.query(
@@ -219,6 +226,7 @@ export async function launch(c: Config, id: string, routeRef: string) {
 }
 export async function refresh(c: Config, id: string) {
   const r = await getRecord(c.id, id);
+  if ((r.request as { routes?: unknown } | null)?.routes) return launchCollection(c, id);
   if (r.request) {
     await apply(
       c,
@@ -330,7 +338,7 @@ export async function receive(c: Config, raw: string, headers: Headers) {
     if (
       r.snapshot &&
       s.revision === r.snapshot.revision &&
-      canonical(s) !== canonical(r.snapshot)
+      canonical({ ...s, sessionState: undefined }) !== canonical({ ...r.snapshot, sessionState: undefined })
     )
       throw new LabError("Conflicting event revision.", 409);
     await db.query(
@@ -347,4 +355,39 @@ export async function receive(c: Config, raw: string, headers: Headers) {
     );
   });
   return { eventId: event.eventId, sourceSyncState: "synced" };
+}
+
+// Public partner contract only: no provider credentials or database access to Pay.
+export async function launchCollection(c: Config, id: string) {
+  const existing = await getRecord(c.id, id);
+  if (!existing.request && (!c.providerTestModeConfirmed || !c.staffCollection)) throw new LabError("Configure the partner staff collection and confirm provider test mode first.", 409);
+  const configuration = existing.request ? null : await settings(c);
+  const r = await transaction(async db => {
+    const row = await record(db, c.id, id);
+    if (row.request && !(row.request as { routes?: unknown }).routes) throw new LabError("Resume the existing payment journey for this booking.", 409);
+    if (!row.request) {
+      assertRequest(c, row.booking);
+      const routes = c.staffCollection!.routes[row.booking.currency];
+      if (!routes || !Object.values(routes).length || Object.entries(routes).some(([action, ref]) => !configuration!.routes.some(route => route.ref === ref && route.currency === row.booking.currency && route.channel === (action === "telephone_payment" ? "MOTO" : "ECOM")))) throw new LabError("Configure explicit granted routes for this currency.", 409);
+      const request = { ...scope(c), idempotencyKey: row.id, source: { reference: row.booking.reference, obligationId: row.id }, amountMinor: minorUnits(row.booking.amount), currency: row.booking.currency, expiresAt: row.booking.expiresAt, routes, ...(row.booking.description ? { description: row.booking.description } : {}), ...(row.booking.customer ? { customer: row.booking.customer } : {}), ...(row.booking.customerCollection ? { customerCollection: row.booking.customerCollection } : {}), ...(row.booking.returnUrl ? { returnUrl: row.booking.returnUrl } : {}), ...(c.staffCollection!.embeddingOrigin ? { embeddingOrigin: c.staffCollection!.embeddingOrigin } : {}) };
+      await db.query("UPDATE pay_lab_bookings SET request=$3 WHERE connection=$1 AND id=$2", [c.id,id,request]);
+      await db.query("INSERT INTO pay_lab_audit(connection,booking_id,actor,action) VALUES($1,$2,$3,$4)", [c.id,id,c.staffUser,"staff_collection_created"]);
+    }
+    return record(db,c.id,id);
+  });
+  const response = await pay(c,r.collection ? "collections/status" : "collections", r.collection ? { collectionId: r.collection.collectionId } : r.request!);
+  if (response.source?.id !== c.sourceId || response.source?.type !== c.sourceType || response.source?.obligationId !== r.id || response.source?.reference !== r.booking.reference || response.amountMinor !== minorUnits(r.booking.amount) || response.currency !== r.booking.currency) throw new LabError("Collection does not match the saved booking.",502);
+  const info = z.object({collectionId:z.string().min(1),staffUrl:z.url(),embedUrl:z.url().nullable(),expiresAt:z.iso.datetime({offset:true})}).parse(response);
+  for (const url of [info.staffUrl,info.embedUrl].filter(Boolean) as string[]) {
+    const parsed = new URL(url);
+    if (parsed.origin !== new URL(c.origin).origin || parsed.username || parsed.password || parsed.hash || !/^\/getedge-pay\/collect\/[a-f0-9]{64}$/.test(parsed.pathname)) throw new LabError("Unexpected staff launch destination.",502);
+  }
+  if (Date.parse(info.expiresAt) !== Date.parse(r.booking.expiresAt) || (r.collection && info.collectionId !== r.collection.collectionId)) throw new LabError("Collection does not match the saved booking.",502);
+  await transaction(async db => {
+    const row = await record(db,c.id,id);
+    if(row.collection && row.collection.collectionId !== info.collectionId)throw new LabError("Collection identity changed.",409);
+    await db.query("UPDATE pay_lab_bookings SET collection=$3 WHERE connection=$1 AND id=$2",[c.id,id,info]);
+  });
+  if (response.payment) await apply(c,id,response.payment);
+  return publicRecord(await getRecord(c.id,id));
 }

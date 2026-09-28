@@ -7,6 +7,7 @@ import "./collection.css";
 type Settings = {
   name: string;
   routes: Route[];
+  staffCollectionConfigured: boolean;
   callbackUrl: string;
   returnUrls: string[];
   sample: {
@@ -23,6 +24,7 @@ type Saved = {
   route: Route | null;
   snapshot: Snapshot | null;
   checkoutUrl: string | null;
+  collection: { staffUrl: string; embedUrl: string | null } | null;
   callbackCount: number;
   submissionUncertain: boolean;
 };
@@ -547,7 +549,9 @@ export default function CollectionLab() {
                     : "No payment has been taken"}
                 </span>
               </div>
-              {!saved.route && (
+              {config.staffCollectionConfigured && !saved.collection && !saved.route && <button disabled={busy} onClick={() => void action(async () => { setSaved(await api(`bookings/${saved.id}/collection`, {})); })}>Prepare hosted staff collection</button>}
+              {saved.collection && <section><h3>GetEdge Pay staff collection</h3><p><a href={saved.collection.staffUrl} target="_blank" rel="noreferrer">Open secure staff collection</a></p>{saved.collection.embedUrl && <iframe title="GetEdge Pay staff collection" src={saved.collection.embedUrl} referrerPolicy="no-referrer" style={{width:"100%",height:760,border:0}} />}</section>}
+              {!config.staffCollectionConfigured && !saved.route && (
                 <>
                   <h3>How would you like to collect payment?</h3>
                   <div className="lab-choices">

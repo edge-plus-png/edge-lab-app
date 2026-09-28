@@ -23,6 +23,7 @@ export const requestSchema = z
       })
       .strict()
       .optional(),
+    customerCollection: z.object({ customerName: z.enum(["hidden", "optional", "required"]), email: z.enum(["hidden", "optional", "required"]), billingPostcode: z.enum(["hidden", "optional", "required"]) }).strict().optional(),
     returnUrl: z.url().max(2048).optional(),
   })
   .strict();

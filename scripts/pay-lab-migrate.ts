@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS pay_lab_bookings (
  callback_count integer NOT NULL DEFAULT 0, created_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(connection,id)
 );
+ALTER TABLE pay_lab_bookings ADD COLUMN IF NOT EXISTS collection jsonb;
 CREATE TABLE IF NOT EXISTS pay_lab_receipts (
  connection text NOT NULL, event_id text NOT NULL, body_hash text NOT NULL,
  booking_id uuid NOT NULL, received_at timestamptz NOT NULL DEFAULT now(),

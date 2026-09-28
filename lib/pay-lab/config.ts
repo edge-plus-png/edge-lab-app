@@ -26,6 +26,10 @@ const configSchema = z
     returnUrls: z.array(https),
     collectScriptUrl: https,
     providerTestModeConfirmed: z.boolean(),
+    staffCollection: z.object({
+      embeddingOrigin: https.refine(v => new URL(v).origin === v).optional(),
+      routes: z.record(z.string().regex(/^[A-Z]{3}$/), z.object({ telephone_payment: z.string().min(1).optional(), payment_link: z.string().min(1).optional() }).strict()),
+    }).strict().optional(),
     sample: z.object({
       reference: z.string().min(1),
       amount: z.string(),

@@ -9,6 +9,7 @@ import {
 import { getRecord, publicRecord } from "@/lib/pay-lab/db";
 import {
   launch,
+  launchCollection,
   operatorSetup,
   receive,
   refresh,
@@ -66,6 +67,10 @@ async function handle(
     const body = JSON.parse((await readBounded(req)) || "{}");
     let result;
     switch (action[2]) {
+      case "collection":
+        z.object({}).strict().parse(body);
+        result = await launchCollection(c, id);
+        break;
       case "launch":
         result = await launch(
           c,

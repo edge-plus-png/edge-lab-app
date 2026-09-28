@@ -32,6 +32,7 @@ export type RecordRow = {
   route: Route | null;
   snapshot: Snapshot | null;
   checkout_url: string | null;
+  collection: { collectionId: string; staffUrl: string; embedUrl: string | null; expiresAt: string } | null;
   attempt_key: string | null;
   attempt_revision: number | null;
   dispatched: boolean;
@@ -55,6 +56,7 @@ export function publicRecord(r: RecordRow) {
     route: r.route,
     snapshot: r.snapshot,
     checkoutUrl: r.checkout_url,
+    collection: r.collection,
     callbackCount: r.callback_count,
     submissionUncertain: r.dispatched,
   };

@@ -40,6 +40,8 @@ export function verify(c: Config, raw: string, headers: Headers) {
 export async function pay(c: Config, path: string, body: object) {
   if (
     ![
+      "collections",
+      "collections/status",
       "routes",
       "configuration",
       "sessions",
