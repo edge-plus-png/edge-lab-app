@@ -655,7 +655,7 @@ export default function CollectionLab() {
               <p>
                 {saved.callbackCount
                   ? `${saved.callbackCount} distinct signed result notification(s) received by this lab.`
-                  : "No signed result notification recorded by this lab. If Anytime is the configured callback receiver, check acknowledgement there."}
+                  : "No signed result notification recorded by this lab. If another application is the configured callback receiver, check acknowledgement there."}
               </p>
               {saved.submissionUncertain &&
                 state !== "approved" &&
