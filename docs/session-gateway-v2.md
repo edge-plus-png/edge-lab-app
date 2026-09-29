@@ -121,3 +121,8 @@ npm run build -- --webpack
 ```
 
 That database address is a test-only execution guard, not merchant configuration. Follow the project release process for staging. No production promotion, live payment, Events source change or Prime change is part of this local candidate.
+# Public integration domain
+
+Before adding a Vercel domain exception for machine callbacks, set `PAY_LAB_PUBLIC_SESSION_HOSTS` to a JSON array of the exact integration hostnames. On those hosts, the proxy permits only the signed v2 session endpoints, the authenticated staff collection tools and framework assets. Legacy direct-provider routes and unsigned session creation are rejected. Each permitted API still checks its own authentication; the host restriction grants no payment authority. Other hosts retain their existing behavior.
+
+The Vercel exception is a separate hosting setting. Deploy and verify the restriction using authorized developer access before changing that setting. Do not expose a domain with this configuration missing.
