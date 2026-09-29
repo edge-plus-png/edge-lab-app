@@ -1,5 +1,6 @@
 // proxy.ts
 import { authorized, getConfig } from "./lib/pay-lab/config";
+import { publicSessionBoundary } from "./lib/session-gateway/public-boundary";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -46,6 +47,8 @@ function isStaticAsset(path: string) {
  * and if we want routes to "see" a header, we must set it on the REQUEST.
  */
 export default function proxy(req: NextRequest) {
+  const boundary = publicSessionBoundary(req.headers.get("host") || "", req.nextUrl.pathname, req.method, req.headers.get("x-getedge-version"));
+  if (boundary !== null) return NextResponse.json({ error: "This operation is unavailable on this integration domain." }, { status: boundary, headers: { "Cache-Control": "no-store" } });
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
   if (req.nextUrl.pathname === "/collect") {
     try {
