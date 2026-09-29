@@ -68,3 +68,7 @@ The matching service's `staff-collections.postgres.test.ts` can import this adap
 The existing ten partner recovery tests also pass. Typecheck, targeted lint and `npm run build -- --webpack` pass. Two legacy pages needed Promise-typed Next.js route parameters for this build. The default Turbopack build encountered a local process/port restriction; webpack is a supported alternative, not a provider test.
 
 Not proven: deployed partner onboarding, actual provider test-mode payments, hosted card fields inside a cross-origin iframe, MOTO tokenization, ECOM 3DS challenge/frictionless authentication, wallets, or autonomous scheduled staging delivery. Keep these explicit release gates.
+
+## External source requests
+
+For Events/Anytime server-to-server requests through the versioned `/api/session` adapter and onward signed callbacks, see [Session API v2](session-gateway-v2.md). This is separate from the staff-login `/collect` sample interface.

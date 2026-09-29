@@ -1,3 +1,6 @@
+import { sessionHandler } from "@/lib/session-gateway/http";
+export const runtime = "nodejs";
+export const maxDuration = 60;
 // app/api/session/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
@@ -69,6 +72,7 @@ function resolveIntent(value: unknown): SessionIntent {
 }
 
 export async function GET(req: NextRequest) {
+  if ([...req.headers.keys()].some(name => name.startsWith("x-getedge-"))) return NextResponse.json({error:"Use signed POST /api/session/status for version 2."},{status:405,headers:{"Cache-Control":"no-store"}});
   const slug = resolveTenant(req);
   const cfg = loadClientConfig(slug);
 
@@ -101,6 +105,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if ([...req.headers.keys()].some(name => name.startsWith("x-getedge-"))) {
+    return sessionHandler(req, "session.create");
+  }
+  // Never silently treat a new-contract request as a legacy direct-provider charge.
+  const probe = await req.clone().json().catch(() => null);
+  if (probe && typeof probe === "object" && ("mode" in probe || "amountMinor" in probe || "requestKey" in probe)) {
+    return NextResponse.json({error:"Versioned source authentication is required."}, {status:401,headers:{"Cache-Control":"no-store"}});
+  }
+
   const slug = resolveTenant(req);
   const cfg = loadClientConfig(slug);
 
