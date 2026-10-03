@@ -2,6 +2,7 @@
 import { authorized, getConfig } from "./lib/pay-lab/config";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { canonicalBoundary, canonicalDeployment } from "./lib/session-gateway/deployment";
 
 function getTenantFromHost(hostHeader: string) {
   const host = (hostHeader || "").split(":")[0].toLowerCase();
@@ -46,6 +47,9 @@ function isStaticAsset(path: string) {
  * and if we want routes to "see" a header, we must set it on the REQUEST.
  */
 export default function proxy(req: NextRequest) {
+  const boundary = canonicalBoundary(req.headers.get("host") || "", req.nextUrl.pathname, req.method);
+  if (boundary) return boundary;
+  if (canonicalDeployment()) return NextResponse.next();
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
   if (req.nextUrl.pathname === "/collect") {
     try {

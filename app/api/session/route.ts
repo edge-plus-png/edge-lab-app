@@ -1,3 +1,4 @@
+import { canonicalDeployment } from "@/lib/session-gateway/deployment";
 import { sessionHandler } from "@/lib/session-gateway/http";
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -105,6 +106,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (canonicalDeployment()) return sessionHandler(req, "session.create");
   if ([...req.headers.keys()].some(name => name.startsWith("x-getedge-"))) {
     return sessionHandler(req, "session.create");
   }

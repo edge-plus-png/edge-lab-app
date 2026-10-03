@@ -2,7 +2,8 @@
   "framework": "nextjs",
   "git": {
     "deploymentEnabled": {
-      "codex/partner-reference-lab": false
+      "codex/partner-reference-lab": false,
+      "codex/phase2-canonical": false
     }
   }
 }

@@ -238,3 +238,38 @@ test("expired worker lease is reclaimed and the previous claim cannot acknowledg
     const stale = await database().query("UPDATE pay_lab_source_outbox SET last_error='stale claim' WHERE booking_id=$1 AND claim=$2", [r.requestId, oldClaim]);
     assert.equal(stale.rowCount, 0);
 });
+test("decline and cancellation persist through signed callback and status recovery", async () => {
+    for (const state of ["declined", "cancelled"] as const) {
+        const requestBody = request(), r = await create(a, requestBody), snap = sessions.get(r.payment.sessionId)!;
+        Object.assign(snap, { revision: 2, paymentState: state, sessionState: state === "cancelled" ? "closed" : "open" });
+        const event = { version: "1", type: "payment.updated", eventId: randomUUID(), data: snap };
+        const response = primeResponse(ca, event); response.headers.set("x-edge-event-id", event.eventId); response.headers.set("host", "lab.test");
+        assert.equal((await callbackHandler(new Request(ca.callbackUrl, { method: "POST", headers: response.headers, body: await response.text() }))).status, 200);
+        const recovered = await sessionHandler(http(a, { requestKey: requestBody.requestKey }, "session.status"), "session.status");
+        assert.equal((await recovered.json()).payment.state, state);
+    }
+});
+test("an authenticated higher revision cannot regress an approval", async () => {
+    const r = await create(a, request()), snap = sessions.get(r.payment.sessionId)!;
+    async function callback(state: string, revision: number) {
+        const event = { version: "1", type: "payment.updated", eventId: randomUUID(), data: { ...snap, revision, paymentState: state, providerReference: "fixture-approved" } };
+        const response = primeResponse(ca, event); response.headers.set("x-edge-event-id", event.eventId); response.headers.set("host", "lab.test");
+        return callbackHandler(new Request(ca.callbackUrl, { method: "POST", headers: response.headers, body: await response.text() }));
+    }
+    assert.equal((await callback("approved", 2)).status, 200);
+    assert.equal((await callback("declined", 3)).status, 409);
+});
+test("support replay preserves event identity and bytes and is authenticated", async () => {
+    const { deliveryHandler } = await import("../../lib/session-gateway/delivery");
+    process.env.PAY_LAB_SUPPORT_SECRET = "fixture-support-secret-at-least-32-characters";
+    const r = await create(a, request());
+    await database().query("UPDATE pay_lab_source_outbox SET exhausted_at=now(),attempts=3 WHERE booking_id=$1", [r.requestId]);
+    const row = (await database().query("SELECT * FROM pay_lab_source_outbox WHERE booking_id=$1", [r.requestId])).rows[0];
+    const call = (body: object, auth = true) => deliveryHandler(new Request("https://lab.test/api/session/delivery", { method: "POST", headers: auth ? { authorization: `Bearer ${process.env.PAY_LAB_SUPPORT_SECRET}` } : {}, body: JSON.stringify(body) }));
+    assert.equal((await call({ action: "replay", eventId: row.event_id, reason: "Receiver restored" }, false)).status, 401);
+    assert.equal((await call({ action: "replay", eventId: row.event_id, reason: "Receiver restored" })).status, 200);
+    const saved = (await database().query("SELECT * FROM pay_lab_source_outbox WHERE event_id=$1", [row.event_id])).rows[0];
+    assert.equal(saved.body, row.body); assert.equal(saved.destination, row.destination); assert.equal(saved.exhausted_at, null);
+    assert.equal((await call({ action: "replay", eventId: row.event_id, reason: "Second replay" })).status, 409);
+    assert.equal((await call({ action: "inspect", requestId: r.requestId })).status, 200);
+});

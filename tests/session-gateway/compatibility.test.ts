@@ -23,3 +23,12 @@ test('versioned GET cannot read legacy session data', async () => {
     const response = await route.GET(new NextRequest('https://app.edge-lab.uk/api/session?sessionId=anything', { headers: { 'x-getedge-version': '2' } }));
     assert.equal(response.status, 405);
 });
+test('canonical profile rejects even a valid legacy payload and all legacy execution handlers', async () => {
+    process.env.PAY_LAB_DEPLOYMENT_MODE = 'canonical';
+    try {
+        const req = () => new NextRequest('https://lab.example/api/session', { method: 'POST', headers: { host: 'lab.example', 'content-type': 'application/json' }, body: JSON.stringify({ amount: 10, currency: 'GBP', reference: 'legacy', customer: { firstName: 'Test', lastName: 'Buyer', email: 'test@example.invalid', postalCode: 'AB1' } }) });
+        const response = await route.POST(req()); assert.equal(response.status, 400); assert.equal((await response.json()).payUrl, undefined);
+        for (const module of [await import('../../app/api/pay/route'), await import('../../app/api/charge/route'), await import('../../app/api/result-resend/route')])
+            assert.equal((await module.POST(req())).status, 410);
+    } finally { delete process.env.PAY_LAB_DEPLOYMENT_MODE; }
+});

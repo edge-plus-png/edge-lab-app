@@ -1,0 +1,13 @@
+{
+  "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": {
+      "codex/partner-reference-lab": false,
+      "codex/phase2-canonical": false
+    }
+  },
+  "env": {
+    "PAY_LAB_DEPLOYMENT_MODE": "canonical",
+    "PAY_LAB_ENVIRONMENT": "staging"
+  }
+}

@@ -117,6 +117,9 @@ export function validateSnapshot(c: Config, r: RecordRow, value: unknown) {
       (s.sessionId !== r.snapshot.sessionId || s.saleId !== r.snapshot.saleId))
   )
     throw new LabError("Payment does not match the saved booking.", 409);
+  if (r.snapshot?.paymentState === "approved" && s.revision >= r.snapshot.revision &&
+      (s.paymentState !== "approved" || s.providerReference !== r.snapshot.providerReference))
+    throw new LabError("Approved payment cannot regress or change provider reference.", 409);
   return s;
 }
 async function apply(c: Config, id: string, value: unknown) {
