@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { configuredSecret } from "./runtime-config";
 const https = z.url().refine((v) => {
   const u = new URL(v);
   return u.protocol === "https:" && !u.username && !u.password && !u.hash;
@@ -19,12 +20,12 @@ export const configSchema = z
     sourceId: z.string().min(1),
     sourceType: z.string().min(1),
     signingSecretEnv: z.string().regex(/^[A-Z][A-Z0-9_]+$/),
-    staffPasswordEnv: z.string().regex(/^[A-Z][A-Z0-9_]+$/),
-    staffUser: z.string().min(1),
+    staffPasswordEnv: z.string().regex(/^[A-Z][A-Z0-9_]+$/).optional(),
+    staffUser: z.string().min(1).optional(),
     routeRefs: z.array(z.string().min(1)).min(1),
     callbackUrl: https,
     returnUrls: z.array(https),
-    collectScriptUrl: https,
+    collectScriptUrl: https.optional(),
     providerTestModeConfirmed: z.boolean(),
     staffCollection: z.object({
       embeddingOrigin: https.refine(v => new URL(v).origin === v).optional(),
@@ -35,7 +36,7 @@ export const configSchema = z
       amount: z.string(),
       currency: z.string().regex(/^[A-Z]{3}$/),
       sessionSeconds: z.number().int().positive().max(2592000),
-    }),
+    }).optional(),
   })
   .strict();
 export type Config = z.infer<typeof configSchema>;
@@ -59,16 +60,17 @@ export function getConfig(host: string | null): Config {
       "GetEdge Pay collection is not configured for this host.",
       503,
     );
+  if (!matching[0].sample || !matching[0].staffUser || !matching[0].staffPasswordEnv || !matching[0].collectScriptUrl) throw new LabError("Reference application is not configured.", 503);
   return matching[0];
 }
 export function secret(c: Config) {
-  const s = process.env[c.signingSecretEnv];
+  const s = configuredSecret(c.signingSecretEnv);
   if (!s || s.length < 32)
     throw new LabError("The server signing credential is not configured.", 503);
   return s;
 }
 export function authorized(c: Config, headers: Headers) {
-  const expected = process.env[c.staffPasswordEnv];
+  const expected = c.staffPasswordEnv ? process.env[c.staffPasswordEnv] : undefined;
   if (!expected || expected.length < 24) return false;
   const actual = headers.get("authorization") || "";
   const wanted =

@@ -1,3 +1,4 @@
+import { rejectLegacyPayment } from "@/lib/session-gateway/deployment";
 // app/api/result-resend/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
@@ -16,6 +17,8 @@ function errorMessage(error: unknown) {
 }
 
 export async function POST(req: NextRequest) {
+  const blocked = rejectLegacyPayment();
+  if (blocked) return blocked;
   const host = req.headers.get("host") || "";
   const slug = getSlugFromHost(host);
   const cfg = loadClientConfig(slug);

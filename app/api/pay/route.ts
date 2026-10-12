@@ -1,3 +1,4 @@
+import { rejectLegacyPayment } from "@/lib/session-gateway/deployment";
 import { NextRequest, NextResponse } from "next/server";
 import { getSlugFromHost } from "@/lib/tenant";
 import { loadClientConfig } from "@/lib/clients";
@@ -8,6 +9,8 @@ function newId() {
 }
 
 export async function POST(req: NextRequest) {
+  const blocked = rejectLegacyPayment();
+  if (blocked) return blocked;
   const host = req.headers.get("host") || "";
   const slug = getSlugFromHost(host);
   const cfg = loadClientConfig(slug);

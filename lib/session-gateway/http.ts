@@ -1,3 +1,4 @@
+import { withRegistry } from "./registry";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { LabError } from "../pay-lab/config";
@@ -7,6 +8,7 @@ import { authenticate, signedHeaders } from "./auth";
 import { connectionFor, key, sources } from "./config";
 import { create, status } from "./service";
 import { deliverBatch } from "./outbox";
+import { wakeDelivery } from "./queue";
 export function failure(error: unknown) {
     const known = error instanceof LabError;
     const code = known ? error.status : error instanceof z.ZodError || error instanceof SyntaxError ? 400 : 503;
@@ -17,10 +19,14 @@ export async function sessionHandler(req: Request, operation: "session.create" |
         if (!req.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
             throw new LabError("JSON content type required.", 415);
         const raw = await readBounded(req);
+        if(req.headers.get("x-getedge-version")!=="2")throw new LabError("Unsupported session API version.",400);
+        return await withRegistry({sourceId:req.headers.get("x-getedge-source") || ""},async () => {
         const s = authenticate(req.headers, req.headers.get("host") || "", operation, raw);
         const result = operation === "session.create" ? await create(s, JSON.parse(raw)) : await status(s, JSON.parse(raw));
+        await wakeDelivery();
         const body = JSON.stringify(result);
         return new Response(body, { headers: signedHeaders(s, `${operation}.response`, body) });
+        });
     }
     catch (error) {
         return failure(error);
@@ -28,10 +34,16 @@ export async function sessionHandler(req: Request, operation: "session.create" |
 }
 export async function callbackHandler(req: Request) {
     try {
+        return await withRegistry({integrationId:req.headers.get("x-edge-integration-id") || ""},async () => {
         const matches = sources().filter(s => s.enabled && s.hosts.includes((req.headers.get("host") || "").toLowerCase())).map(s => ({ s, c: connectionFor(s) })).filter(({ c }) => c.integrationId === req.headers.get("x-edge-integration-id"));
         if (matches.length !== 1)
             throw new LabError("Unknown callback integration.", 401);
-        return Response.json(await receive(matches[0].c, await readBounded(req), req.headers), { headers: { "cache-control": "no-store" } });
+        const result = await receive(matches[0].c, await readBounded(req), req.headers);
+        // If publication fails, do not acknowledge Prime. Its retry reuses the
+        // persisted event and safely tries this wake-up again.
+        await wakeDelivery();
+        return Response.json(result, { headers: { "cache-control": "no-store" } });
+        });
     }
     catch (error) {
         return failure(error);
