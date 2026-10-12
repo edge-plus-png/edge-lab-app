@@ -1,3 +1,4 @@
+import { withRegistry } from "./registry";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { Snapshot } from "../pay-lab/contract";
@@ -34,6 +35,7 @@ export async function deliverBatch(limit = 1) {
         let ok = false;
         try {
             const saved = sourceSchema.parse(row.policy);
+            await withRegistry({sourceId:saved.id},async()=>{
             // Revocation prevents delivery; destination/policy remain frozen to the original request.
             const active = sources().find(s => s.id === saved.id && s.enabled && s.connectionId === saved.connectionId);
             if (!active)
@@ -44,6 +46,7 @@ export async function deliverBatch(limit = 1) {
                 const receipt = JSON.parse(await readBounded(response));
                 ok = receipt.eventId === row.event_id && receipt.accepted === true;
             }
+            });
         }
         catch { /* Redacted outcome only; retry the exact stored bytes. */ }
         const policy = row.policy as Source;

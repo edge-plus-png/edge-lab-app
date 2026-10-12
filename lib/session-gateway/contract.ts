@@ -12,6 +12,8 @@ export const sessionRequest = z.object({
 }).strict();
 export type SessionRequest = z.infer<typeof sessionRequest>;
 export function validatePolicy(s: Source, r: SessionRequest) {
+    if (r.mode === "pbl" && r.presentation !== "hosted")
+        throw new LabError("Payment Links return a hosted customer URL.", 400);
     if (!s.modes.includes(r.mode) || !s.presentations.includes(r.presentation))
         throw new LabError("Journey or presentation is not enabled.", 403);
     if (!s.routes[r.currency]?.[r.mode])

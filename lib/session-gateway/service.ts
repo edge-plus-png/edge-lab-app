@@ -56,7 +56,7 @@ async function resume(s: Source, external: External) {
     const r = external.request, saved = external.source_config;
     const c = connectionFor(s);
     // Frozen destinations, route and request survive ordinary configuration edits.
-    const configured = { ...c, returnUrls: saved.returnUrls, staffUser: r.operator?.id || c.staffUser };
+    const configured = { ...c, returnUrls: saved.returnUrls, staffUser: r.operator?.id || s.id };
     await saveBooking(configured, { id: external.booking_id, reference: r.reference, amount: `${Math.floor(r.amountMinor / 100)}.${String(r.amountMinor % 100).padStart(2, "0")}`, currency: r.currency, expiresAt: r.expiresAt, ...(r.description !== undefined ? { description: r.description } : {}), ...(r.customer ? { customer: r.customer } : {}), ...(r.customerCollection ? { customerCollection: r.customerCollection } : {}), ...(r.returnUrl ? { returnUrl: r.returnUrl } : {}) });
     const existing = await getRecord(c.id, external.booking_id);
     if (!existing.request) {
@@ -64,7 +64,9 @@ async function resume(s: Source, external: External) {
         if (!available.routes.some(route => route.ref === external.route_ref && route.currency === r.currency && route.channel === (r.mode === "vt" ? "MOTO" : "ECOM")))
             throw new LabError("Configured mode route is not granted by Prime.", 403);
     }
-    if (r.mode === "ecom")
+    if (r.mode === "pbl" && (existing.request as { routes?: unknown } | null)?.routes)
+        throw new LabError("This saved request uses the retired two-step staff link journey. Recover it through its original collection; do not create a replacement obligation for an uncertain payment.", 409);
+    if (r.mode === "ecom" || r.mode === "pbl")
         await launch(configured, external.booking_id, external.route_ref);
     else {
         const action = r.mode === "vt" ? "telephone_payment" : "payment_link";
@@ -72,7 +74,7 @@ async function resume(s: Source, external: External) {
         await launchCollection(selected, external.booking_id);
     }
     const row = await getRecord(c.id, external.booking_id);
-    let url = r.mode === "ecom" ? row.checkout_url : row.collection?.staffUrl;
+    let url = r.mode !== "vt" ? row.checkout_url : row.collection?.staffUrl;
     if (r.presentation === "inline") {
         if (r.mode === "ecom" && url) {
             const embedded = new URL(url);
@@ -85,5 +87,5 @@ async function resume(s: Source, external: External) {
             throw new LabError("Prime did not supply the requested embedded experience.", 502);
     }
     const deliveries = await database().query("SELECT event_id,revision,attempts,delivered_at,exhausted_at FROM pay_lab_source_outbox WHERE connection=$1 AND booking_id=$2 ORDER BY revision DESC LIMIT 1", [c.id, row.id]);
-    return { version: "2", requestId: row.id, requestKey: r.requestKey, obligationId: r.obligationId, reference: r.reference, mode: r.mode, presentation: r.presentation, amountMinor: r.amountMinor, currency: r.currency, expiresAt: r.expiresAt, launch: url ? { url, presentation: r.presentation, audience: r.mode === "ecom" ? "customer" : "staff" } : null, payment: row.snapshot ? { sessionId: row.snapshot.sessionId, saleId: row.snapshot.saleId, revision: row.snapshot.revision, state: row.snapshot.paymentState, sessionState: row.snapshot.sessionState, providerReference: row.snapshot.providerReference } : null, delivery: deliveries.rows[0] || null };
+    return { version: "2", requestId: row.id, requestKey: r.requestKey, obligationId: r.obligationId, reference: r.reference, mode: r.mode, presentation: r.presentation, amountMinor: r.amountMinor, currency: r.currency, expiresAt: r.expiresAt, launch: url ? { url, presentation: r.presentation, audience: r.mode !== "vt" ? "customer" : "staff" } : null, payment: row.snapshot ? { sessionId: row.snapshot.sessionId, saleId: row.snapshot.saleId, revision: row.snapshot.revision, state: row.snapshot.paymentState, sessionState: row.snapshot.sessionState, providerReference: row.snapshot.providerReference } : null, delivery: deliveries.rows[0] || null };
 }

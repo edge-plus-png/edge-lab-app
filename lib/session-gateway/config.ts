@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { configuredSecret, runtimeConfiguration } from "../pay-lab/runtime-config";
 import { Config, LabError, configSchema } from "../pay-lab/config";
 const https = z.url().refine(v => { const u = new URL(v); return u.protocol === "https:" && !u.username && !u.password && !u.hash; });
 const env = z.string().regex(/^[A-Z][A-Z0-9_]+$/);
@@ -17,7 +18,7 @@ export const sourceSchema = z.object({
 }).strict();
 export type Source = z.infer<typeof sourceSchema>;
 export function sources() {
-    const entries = z.array(sourceSchema).parse(JSON.parse(process.env.PAY_LAB_SOURCES || "[]"));
+    const entries = z.array(sourceSchema).parse([...JSON.parse(process.env.PAY_LAB_SOURCES || "[]"), ...(runtimeConfiguration.getStore()?.sources ?? [])]);
     if (new Set(entries.map(s => s.id)).size !== entries.length || new Set(entries.map(s => s.connectionId)).size !== entries.length)
         throw new LabError("Source configuration must have unique identities and dedicated connections.", 503);
     return entries;
@@ -29,7 +30,7 @@ export function sourceFor(id: string, host: string): Source {
     return s;
 }
 export function connectionFor(s: Source): Config {
-    const all = z.array(configSchema).parse(JSON.parse(process.env.PAY_LAB_CONNECTIONS || "[]"));
+    const all = z.array(configSchema).parse([...JSON.parse(process.env.PAY_LAB_CONNECTIONS || "[]"), ...(runtimeConfiguration.getStore()?.connections ?? [])]);
     const match = all.filter(c => c.id === s.connectionId);
     if (match.length !== 1)
         throw new LabError("Source payment connection is not configured.", 503);
@@ -38,7 +39,7 @@ export function connectionFor(s: Source): Config {
     return match[0];
 }
 export function key(name: string) {
-    const value = process.env[name];
+    const value = configuredSecret(name);
     if (!value || value.length < 32)
         throw new LabError("Server signing credential is not configured.", 503);
     return value;

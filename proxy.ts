@@ -1,7 +1,10 @@
+import { consumerConfiguration } from './lib/developer-ecom/consumer-config';
 // proxy.ts
+import { developerSource, developerChallenge } from "./lib/session-gateway/developer";
 import { authorized, getConfig } from "./lib/pay-lab/config";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { canonicalBoundary, canonicalDeployment } from "./lib/session-gateway/deployment";
 
 function getTenantFromHost(hostHeader: string) {
   const host = (hostHeader || "").split(":")[0].toLowerCase();
@@ -46,6 +49,15 @@ function isStaticAsset(path: string) {
  * and if we want routes to "see" a header, we must set it on the REQUEST.
  */
 export default function proxy(req: NextRequest) {
+  const boundary = canonicalBoundary(req.headers.get("host") || "", req.nextUrl.pathname, req.method);
+  if (boundary) {
+    if (canonicalDeployment() && req.nextUrl.pathname === "/" && req.headers.get("accept")?.includes("text/html") && boundary.status === 200) return NextResponse.redirect(new URL("/developer", req.url));
+    return boundary;
+  }
+  if (canonicalDeployment() && ["/developer", "/developer/guide", "/developer-guide.md", "/developer-client.mjs", "/hosted-ecom-example.mjs", "/hosted-moto-example.mjs", "/hosted-moto-guide.md", "/payment-link-example.mjs", "/payment-link-guide.md", "/developer/payment-links", "/developer/moto"].includes(req.nextUrl.pathname)) {
+    try { const c=consumerConfiguration(); const source=c?developerSource(req.headers,[{source:c.source,staffUser:c.staffUser,staffPasswordEnv:c.staffPasswordEnv}]):developerSource(req.headers); if (!source) return NextResponse.redirect(new URL("/developer/login",req.url)); } catch { return developerChallenge(); }
+  }
+  if (canonicalDeployment()) return NextResponse.next();
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
   if (req.nextUrl.pathname === "/collect") {
     try {
