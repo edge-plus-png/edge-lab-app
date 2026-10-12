@@ -1,5 +1,6 @@
 {
   "framework": "nextjs",
+  "regions": ["lhr1"],
   "functions": {
     "app/api/queues/lab-results/route.ts": {
       "experimentalTriggers": [{ "type": "queue/v2beta", "topic": "pay-lab-results" }]
