@@ -11,15 +11,15 @@ import { readBounded } from '../pay-lab/transport';
 export function handlers(mode:DemoMode){
  function access(headers:Headers){const c=consumerConfiguration();return c?developerSource(headers,[{source:c.source,staffUser:c.staffUser,staffPasswordEnv:c.staffPasswordEnv}]):developerSource(headers);}
  async function publicResponse(req:Request, ids?:string[]){
-  const c=publicEcomConfiguration(req.headers)!;
+  const c=publicEcomConfiguration(req.headers,mode)!;
   const secret=process.env[c.staffPasswordEnv];if(!secret || secret.length<32)throw new LabError('Demo access is not configured.',503);
   const owned=ids ?? publicExampleIds(req.headers,c.source.id,secret);
-  const examples=owned.length ? (await database().query("SELECT * FROM pay_lab_developer_ecom WHERE source=$1 AND id=ANY($2::uuid[]) AND request->>'mode'='ecom' ORDER BY created_at DESC",[c.source.id,owned])).rows : [];
-  return Response.json({config:demoConfiguration(c.source,'ecom'),examples},{headers:{'Cache-Control':'no-store',...(ids?{'Set-Cookie':publicExampleCookie(c.source.id,ids,secret)}:{})}});
+  const examples=owned.length ? (await database().query("SELECT * FROM pay_lab_developer_ecom WHERE source=$1 AND id=ANY($2::uuid[]) AND request->>'mode'=$3 ORDER BY created_at DESC",[c.source.id,owned,mode])).rows : [];
+  return Response.json({config:{...demoConfiguration(c.source,mode),publicDemo:true},examples},{headers:{'Cache-Control':'no-store',...(ids?{'Set-Cookie':publicExampleCookie(c.source.id,ids,secret)}:{})}});
  }
- async function GET(req:Request){try{if(mode==='ecom'&&publicEcomConfiguration(req.headers))return await publicResponse(req);const s=access(req.headers);if(!s)return developerChallenge();return Response.json({config:demoConfiguration(s,mode),examples:await listExamples(s,mode)},{headers:{'Cache-Control':'no-store'}})}catch(e){return failure(e)}}
+ async function GET(req:Request){try{if(publicEcomConfiguration(req.headers,mode))return await publicResponse(req);const s=access(req.headers);if(!s)return developerChallenge();return Response.json({config:demoConfiguration(s,mode),examples:await listExamples(s,mode)},{headers:{'Cache-Control':'no-store'}})}catch(e){return failure(e)}}
  async function POST(req:Request){try{
-  const publicConfig=mode==='ecom'?publicEcomConfiguration(req.headers):null;
+  const publicConfig=publicEcomConfiguration(req.headers,mode);
   if(publicConfig){
    sameOrigin(req);
    const secret=process.env[publicConfig.staffPasswordEnv];if(!secret||secret.length<32)throw new LabError('Demo access is not configured.',503);
@@ -34,8 +34,10 @@ export function handlers(mode:DemoMode){
    // Grant only this new random example ID, including when the provider call
    // fails, so the same browser can recover its persisted request safely.
    try{
-    if(body.action==='create')await createExample(publicConfig.source,body.input,'ecom');
-    else if(body.action==='recover')await recoverExample(publicConfig.source,id,'ecom');
+    // Explicit public staging grant runs as the configured Lab test operator.
+    // It does not claim that a human has signed in; external applications retain their own staff access policy.
+    if(body.action==='create')await createExample(publicConfig.source,body.input,mode,mode==='ecom'?undefined:new Date().toISOString());
+    else if(body.action==='recover')await recoverExample(publicConfig.source,id,mode);
     else throw new LabError('Unknown action',400);
     return await publicResponse(req,ids);
    }catch(e){const response=failure(e);response.headers.set('Set-Cookie',publicExampleCookie(publicConfig.source.id,ids,secret));return response;}

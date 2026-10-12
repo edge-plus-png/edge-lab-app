@@ -42,4 +42,20 @@ test('public HTTP exposes no historical records and cannot authenticate MOTO or 
  const claim=await handlers('ecom').POST(new Request('https://demo.example.test/api/developer/ecom',{method:'POST',headers:{host:'demo.example.test',origin:'https://demo.example.test'},body:JSON.stringify({action:'create',input:{submissionId:id}})}));
  assert.equal(claim.status,403);assert.equal(claim.headers.get('set-cookie'),null);
 });
+test('public staging staff demos expose only owned records of the requested enabled mode',async()=>{
+ process.env.PAY_LAB_PUBLIC_DEMO='true';
+ const config=JSON.parse(process.env.PAY_LAB_DEVELOPER_APP_CONFIG!);config.modes=['ecom','vt','pbl'];process.env.PAY_LAB_DEVELOPER_APP_CONFIG=JSON.stringify(config);
+ const {handlers}=await import('../../lib/developer-ecom/http');
+ const headers={host:'demo.example.test',cookie:publicExampleCookie('source-a',[id],secret)};
+ for(const mode of ['vt','pbl'] as const){
+  assert.ok(publicEcomConfiguration(new Headers(headers),mode));
+  const response=await handlers(mode).GET(new Request('https://demo.example.test/api/developer/moto',{headers}));
+  assert.equal(response.status,200);const body=await response.json();assert.equal(body.config.publicDemo,true);assert.deepEqual(body.examples,[]);
+  const recovery=await handlers(mode).POST(new Request('https://demo.example.test/api/developer/moto',{method:'POST',headers:{host:'demo.example.test',origin:'https://demo.example.test'},body:JSON.stringify({action:'recover',id})}));
+  assert.equal(recovery.status,403);
+ }
+ process.env.VERCEL_ENV='production';assert.equal(publicEcomConfiguration(new Headers(headers),'vt'),null);process.env.VERCEL_ENV='preview';
+ config.modes=['ecom'];process.env.PAY_LAB_DEVELOPER_APP_CONFIG=JSON.stringify(config);assert.equal(publicEcomConfiguration(new Headers(headers),'pbl'),null);
+ delete process.env.PAY_LAB_PUBLIC_DEMO;
+});
 after(async()=>{await database().end()});

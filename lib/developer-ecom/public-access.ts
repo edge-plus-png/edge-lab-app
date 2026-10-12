@@ -4,12 +4,13 @@ import { consumerConfiguration } from './consumer-config';
 
 const cookieName = '__Host-getedge-demo';
 const lifetime = 4 * 60 * 60 * 1000;
-// Public ECOM access is confined to the explicitly configured staging consumer.
-// It never authenticates an operator or opens the source-wide evidence API.
-export function publicEcomConfiguration(headers: Headers) {
- if (!canonicalDeployment() || process.env.PAY_LAB_ENVIRONMENT !== 'staging' || process.env.VERCEL_ENV === 'production' || process.env.PAY_LAB_PUBLIC_ECOM !== 'true') return null;
+// Public access is confined to the explicitly configured staging test consumer.
+// The configured Lab service operator represents test requests, not a signed-in person.
+// This does not open the source-wide evidence API.
+export function publicEcomConfiguration(headers: Headers, mode: 'ecom'|'vt'|'pbl' = 'ecom') {
+ if (!canonicalDeployment() || process.env.PAY_LAB_ENVIRONMENT !== 'staging' || process.env.VERCEL_ENV === 'production' || !(process.env.PAY_LAB_PUBLIC_DEMO === 'true' || (mode === 'ecom' && process.env.PAY_LAB_PUBLIC_ECOM === 'true'))) return null;
  const c = consumerConfiguration();
- return c && c.modes.includes('ecom') && c.source.hosts.includes((headers.get('host') || '').toLowerCase()) ? c : null;
+ return c && c.modes.includes(mode) && c.source.hosts.includes((headers.get('host') || '').toLowerCase()) ? c : null;
 }
 function mac(data: string, secret: string) { return createHmac('sha256', secret).update(`public-ecom:${data}`).digest('hex'); }
 export function publicExampleIds(headers: Headers, source: string, secret: string): string[] {
