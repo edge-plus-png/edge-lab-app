@@ -59,19 +59,21 @@ async function resume(s: Source, external: External) {
     const configured = { ...c, returnUrls: saved.returnUrls, staffUser: r.operator?.id || s.id };
     await saveBooking(configured, { id: external.booking_id, reference: r.reference, amount: `${Math.floor(r.amountMinor / 100)}.${String(r.amountMinor % 100).padStart(2, "0")}`, currency: r.currency, expiresAt: r.expiresAt, ...(r.description !== undefined ? { description: r.description } : {}), ...(r.customer ? { customer: r.customer } : {}), ...(r.customerCollection ? { customerCollection: r.customerCollection } : {}), ...(r.returnUrl ? { returnUrl: r.returnUrl } : {}) });
     const existing = await getRecord(c.id, external.booking_id);
+    // Reuse only this request's freshly verified configuration; never cache grants across requests.
+    let available: Awaited<ReturnType<typeof settings>> | undefined;
     if (!existing.request) {
-        const available = await settings(configured);
+        available = await settings(configured);
         if (!available.routes.some(route => route.ref === external.route_ref && route.currency === r.currency && route.channel === (r.mode === "vt" ? "MOTO" : "ECOM")))
             throw new LabError("Configured mode route is not granted by Prime.", 403);
     }
     if (r.mode === "pbl" && (existing.request as { routes?: unknown } | null)?.routes)
         throw new LabError("This saved request uses the retired two-step staff link journey. Recover it through its original collection; do not create a replacement obligation for an uncertain payment.", 409);
     if (r.mode === "ecom" || r.mode === "pbl")
-        await launch(configured, external.booking_id, external.route_ref);
+        await launch(configured, external.booking_id, external.route_ref, available);
     else {
         const action = r.mode === "vt" ? "telephone_payment" : "payment_link";
         const selected = { ...configured, staffCollection: { routes: { [r.currency]: { [action]: external.route_ref } }, ...(r.presentation === "inline" ? { embeddingOrigin: r.embeddingOrigin } : {}) } };
-        await launchCollection(selected, external.booking_id);
+        await launchCollection(selected, external.booking_id, available);
     }
     const row = await getRecord(c.id, external.booking_id);
     let url = r.mode !== "vt" ? row.checkout_url : row.collection?.staffUrl;

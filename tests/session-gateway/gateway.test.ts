@@ -28,6 +28,8 @@ const deliveries: {
     headers: Headers;
 }[] = [];
 let dropLink = false;
+const configurationCalls: string[] = [];
+let denyRoutes = false, wrongCallback = false;
 let dropCreate = false, dropAck = false, receiverDown = false;
 const originalFetch = global.fetch;
 function primeResponse(c: Config, value: unknown) { const raw = JSON.stringify(value), time = String(Math.floor(Date.now() / 1000)); return new Response(raw, { headers: { "x-edge-integration-id": c.integrationId, "x-edge-signature-timestamp": time, "x-edge-signature-v2": sign(process.env.GATEWAY_TEST_PRIME!, time, raw) } }); }
@@ -64,11 +66,12 @@ before(() => {
         const c = headers.get("x-edge-integration-id") === ca.integrationId ? ca : cb;
         const body = verify(c, raw, headers), path = u.pathname.replace("/api/pay/v1/", "");
         const scope = { version: "1", merchantId: c.merchantId, pairingId: c.pairingId, environment: "staging" };
+        if (path === "routes" || path === "configuration") configurationCalls.push(path);
         const routes = ["GBP", "EUR"].flatMap(currency => ["ECOM", "MOTO"].map(channel => ({ ref: `${channel === "ECOM" ? "ecom" : "moto"}-${currency.toLowerCase()}`, label: "fixture route", channel, currency, presentation: channel === "ECOM" ? "hosted_customer" : "operator_card" })));
         if (path === "configuration")
-            return primeResponse(c, { ...scope, callbackUrl: c.callbackUrl });
+            return primeResponse(c, { ...scope, callbackUrl: wrongCallback ? "https://wrong.test/callback" : c.callbackUrl });
         if (path === "routes")
-            return primeResponse(c, { ...scope, routes });
+            return primeResponse(c, { ...scope, routes: denyRoutes ? [] : routes });
         if (path === "collections") {
             const key = `${c.id}:${body.source.obligationId}`;
             let collection = collections.get(key);
@@ -114,6 +117,24 @@ test("authentication binds source, operation, host and bytes", async () => {
         assert.notEqual((await sessionHandler(http(a, body, "session.create", headers), "session.create")).status, 200);
     }
     assert.equal((await sessionHandler(http(a, body), "session.status")).status, 401);
+});
+test("each new product request verifies configuration once, preserves grants and replays without refetching", async () => {
+    for (const mode of ["ecom", "vt", "pbl"]) {
+        const body = request(b, { mode, currency: "EUR", amountMinor: 1723, ...(mode !== "ecom" ? { operator: { id: "staff-test", authenticatedAt: new Date().toISOString() } } : {}) });
+        configurationCalls.length = 0;
+        const first = await create(b, body);
+        assert.deepEqual(configurationCalls.sort(), ["configuration", "routes"]);
+        configurationCalls.length = 0;
+        assert.equal((await create(b, body)).launch.url, first.launch.url);
+        assert.deepEqual(configurationCalls, []);
+        for (const failure of ["routes", "callback"]) {
+            denyRoutes = failure === "routes"; wrongCallback = failure === "callback";
+            try {
+                const response = await sessionHandler(http(b, { ...body, requestKey: randomUUID(), obligationId: randomUUID() }), "session.create");
+                assert.equal(response.status, failure === "routes" ? 403 : 409);
+            } finally { denyRoutes = false; wrongCallback = false; }
+        }
+    }
 });
 test("ECOM replay is durable and conflicting amount/obligation is rejected", async () => {
     const body = request();
