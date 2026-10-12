@@ -56,7 +56,7 @@ export default function proxy(req: NextRequest) {
     return boundary;
   }
   if (canonicalDeployment() && ["/developer", "/developer/guide", "/developer-guide.md", "/developer-client.mjs", "/hosted-ecom-example.mjs", "/hosted-moto-example.mjs", "/hosted-moto-guide.md", "/payment-link-example.mjs", "/payment-link-guide.md", "/developer/payment-links", "/developer/moto"].includes(req.nextUrl.pathname)) {
-    try { if (["/developer", "/developer/guide", "/developer-guide.md", "/developer-client.mjs", "/hosted-ecom-example.mjs"].includes(req.nextUrl.pathname) && publicEcomConfiguration(req.headers)) return NextResponse.next(); const c=consumerConfiguration(); const source=c?developerSource(req.headers,[{source:c.source,staffUser:c.staffUser,staffPasswordEnv:c.staffPasswordEnv}]):developerSource(req.headers); if (!source) return NextResponse.redirect(new URL("/developer/login",req.url)); } catch { return developerChallenge(); }
+    try { if (publicEcomConfiguration(req.headers, req.nextUrl.pathname.includes("moto") ? "vt" : req.nextUrl.pathname.includes("payment-link") ? "pbl" : "ecom")) return NextResponse.next(); const c=consumerConfiguration(); const source=c?developerSource(req.headers,[{source:c.source,staffUser:c.staffUser,staffPasswordEnv:c.staffPasswordEnv}]):developerSource(req.headers); if (!source) return NextResponse.redirect(new URL("/developer/login",req.url)); } catch { return developerChallenge(); }
   }
   if (canonicalDeployment()) return NextResponse.next();
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();

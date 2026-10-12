@@ -43,10 +43,12 @@ test('public HTTP exposes no historical records and cannot authenticate MOTO or 
  assert.equal(claim.status,403);assert.equal(claim.headers.get('set-cookie'),null);
 });
 test('public staging staff demos expose only owned records of the requested enabled mode',async()=>{
- process.env.PAY_LAB_PUBLIC_DEMO='true';
+ process.env.PAY_LAB_PUBLIC_DEMO='true';process.env.PAY_LAB_CANONICAL_HOSTS=JSON.stringify(['demo.example.test']);
  const config=JSON.parse(process.env.PAY_LAB_DEVELOPER_APP_CONFIG!);config.modes=['ecom','vt','pbl'];process.env.PAY_LAB_DEVELOPER_APP_CONFIG=JSON.stringify(config);
  const {handlers}=await import('../../lib/developer-ecom/http');
  const headers={host:'demo.example.test',cookie:publicExampleCookie('source-a',[id],secret)};
+ const {default:proxy}=await import('../../proxy');const {NextRequest}=await import('next/server');
+ for(const path of ['/developer','/developer/moto','/developer/payment-links','/hosted-moto-example.mjs','/payment-link-example.mjs']){const response=proxy(new NextRequest('https://demo.example.test'+path,{headers}));assert.equal(response.headers.get('x-middleware-next'),'1');assert.equal(response.headers.get('location'),null);}
  for(const mode of ['vt','pbl'] as const){
   assert.ok(publicEcomConfiguration(new Headers(headers),mode));
   const response=await handlers(mode).GET(new Request('https://demo.example.test/api/developer/moto',{headers}));
