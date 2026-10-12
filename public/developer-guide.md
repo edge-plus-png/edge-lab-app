@@ -86,3 +86,14 @@ Conflicting data under the same identity returns 409. Browser return is navigati
 ## Lab access and scope
 
 The interactive example needs a dedicated Hosted ECOM source with its own callback receiver and login. It calls the public signed API over HTTP and retains its real immediate response and verified callback separately. It cannot reuse a differently configured consumer connection. No Events repository or Events UI is needed. MOTO, Links, inline, terminals, Vault and recurring are outside Build 1.
+
+
+## Automatic browser return and authoritative payment result
+
+Hosted flow: send payment details → open `launch.url` → complete payment → automatically return to your registered `returnUrl` after a confirmed approval or decline. Hosted MOTO returns the staff member; ECOM and Payment Link return the customer. The saved, permitted return URL is used unchanged. A manual return link remains available. Without a return URL, the result stays on the hosted page. Embedded consumers retain control of their own navigation.
+
+The browser return does not report or prove approval. GetEdge sends the signed callback independently; it can arrive before or after the browser returns. Your return page must find its saved request/order, read the verified stored result and show approval or decline accordingly. While the result is absent or pending, show **Confirming payment**, then use the signed Session Status operation with the original requestKey to recover the result. Never create a replacement payment to resolve a delayed response. Verify recovered responses just as the supplied client demonstrates.
+
+Awaiting, processing, pending and unknown states do not trigger automatic return. Cancellation or expiry is not approval. Callback retries and duplicate/revision handling remain unchanged; acknowledge only after persisting the verified event. A manual return click must not mark the order paid.
+
+Payment Links may be completed later or in another browser. Persist the request-to-order mapping on your server; do not depend on the original browser session for reconciliation. Your application can apply verified results automatically, or staff can check confirmed payment and record it manually. Sending the link does not mean it has been paid.

@@ -13,7 +13,9 @@ else {
  const lifetime=Number(required('GETEDGE_SESSION_SECONDS'));if(!Number.isInteger(lifetime)||lifetime<1)throw Error('Use the lifetime supplied by GetEdge');
  const authenticatedAt=required('GETEDGE_OPERATOR_AUTHENTICATED_AT');
  if(!Number.isFinite(Date.parse(authenticatedAt))||Math.abs(Date.now()-Date.parse(authenticatedAt))>300000)throw Error('Use the timestamp from actual staff authentication within five minutes; authenticate again if stale.');
- request={operator:{id:required('GETEDGE_OPERATOR_ID'),authenticatedAt},requestKey:randomUUID(),obligationId:randomUUID(),reference:required('GETEDGE_REFERENCE'),amountMinor,currency:required('GETEDGE_CURRENCY'),mode:'vt',presentation:'hosted',expiresAt:new Date(Date.now()+lifetime*1000).toISOString(),returnUrl:required('GETEDGE_RETURN_URL')};
+ const customer=process.env.GETEDGE_CUSTOMER_FILE?JSON.parse(fs.readFileSync(process.env.GETEDGE_CUSTOMER_FILE,'utf8')):undefined;
+ if(customer&&(typeof customer!=='object'||Array.isArray(customer)))throw Error('Customer file must contain a customer JSON object');
+ request={...(customer?{customer}:{}),...(process.env.GETEDGE_DESCRIPTION?{description:process.env.GETEDGE_DESCRIPTION}:{}),operator:{id:required('GETEDGE_OPERATOR_ID'),authenticatedAt},requestKey:randomUUID(),obligationId:randomUUID(),reference:required('GETEDGE_REFERENCE'),amountMinor,currency:required('GETEDGE_CURRENCY'),mode:'vt',presentation:'hosted',expiresAt:new Date(Date.now()+lifetime*1000).toISOString(),returnUrl:required('GETEDGE_RETURN_URL')};
  fs.writeFileSync(path,JSON.stringify(request),{flag:'wx',mode:0o600});
 }
 if(request.mode!=='vt'||request.presentation!=='hosted'||!request.operator)throw Error('Use a separate saved request file for Hosted MOTO.');

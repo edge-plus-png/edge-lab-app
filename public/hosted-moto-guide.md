@@ -16,7 +16,7 @@ The dedicated demonstration source is `developer-lab-ecom` (its existing identif
 
 Your merchant/account, required currencies, maximum request lifetime, stable operator identifiers and staff authentication method. Your server must authorise the staff member to take MOTO payments.
 
-Supply a publicly reachable HTTPS callback endpoint without interactive browser authentication, and the exact HTTPS browser return URL. The callback is the authoritative server-to-server payment result; the browser return only navigates staff back to your software. The Lab uses `https://staging.edge-lab.uk/api/developer/callback` as its consumer callback and `https://staging.edge-lab.uk/developer/moto` as its MOTO browser return. Your system supplies its own destinations. Prime's `/api/session/callback` destination is internal to GetEdge; do not implement that endpoint yourself.
+Supply a publicly reachable HTTPS callback endpoint without interactive browser authentication, and the exact HTTPS browser return URL. The callback is the authoritative server-to-server payment result; the browser return only navigates staff back to your software. The Lab uses `https://staging.edge-lab.uk/api/developer/callback` as its consumer callback and `https://staging.edge-lab.uk/developer` as its registered browser return (the Lab restores the MOTO view). Your system supplies its own destinations. Prime's `/api/session/callback` destination is internal to GetEdge; do not implement that endpoint yourself.
 
 ## Required creation fields
 
@@ -62,3 +62,14 @@ A returned browser is not payment success. Mark paid only after a verified `appr
 Use only the test-card instructions shown for the configured NMI test-mode account. Do not infer sandbox safety from a hostname. Build 2 is verified only when a new Lab-originated test payment is recorded in the acceptance evidence; simulated automated tests are not provider acceptance. Real decline/cancellation/outage testing is separate from an approval test.
 
 Live requires separately provisioned credentials, merchant MOTO approval/routes, confirmed processing environment, staff authorisation, registered live destinations and live acceptance. This Lab is staging-only; changing the URL or reusing test keys does not make it live.
+
+
+## Automatic browser return and authoritative payment result
+
+Hosted flow: send payment details → open `launch.url` → complete payment → automatically return to your registered `returnUrl` after a confirmed approval or decline. Hosted MOTO returns the staff member; ECOM and Payment Link return the customer. The saved, permitted return URL is used unchanged. A manual return link remains available. Without a return URL, the result stays on the hosted page. Embedded consumers retain control of their own navigation.
+
+The browser return does not report or prove approval. GetEdge sends the signed callback independently; it can arrive before or after the browser returns. Your return page must find its saved request/order, read the verified stored result and show approval or decline accordingly. While the result is absent or pending, show **Confirming payment**, then use the signed Session Status operation with the original requestKey to recover the result. Never create a replacement payment to resolve a delayed response. Verify recovered responses just as the supplied client demonstrates.
+
+Awaiting, processing, pending and unknown states do not trigger automatic return. Cancellation or expiry is not approval. Callback retries and duplicate/revision handling remain unchanged; acknowledge only after persisting the verified event. A manual return click must not mark the order paid.
+
+Payment Links may be completed later or in another browser. Persist the request-to-order mapping on your server; do not depend on the original browser session for reconciliation. Your application can apply verified results automatically, or staff can check confirmed payment and record it manually. Sending the link does not mean it has been paid.

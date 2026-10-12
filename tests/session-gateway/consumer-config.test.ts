@@ -66,3 +66,13 @@ test('all three consumer journeys use the registered return and independent sign
  }
  process.env.PAY_LAB_DEVELOPER_APP_CONFIG=JSON.stringify({...app,returnUrl:'https://other.test/return'});assert.throws(()=>consumerConfiguration());
 });
+
+test('merchant details travel unchanged for MOTO and Link; ECOM leaves customer entry to checkout',()=>{
+ process.env.PAY_LAB_DEVELOPER_APP_CONFIG=JSON.stringify({...app,modes:['ecom','vt','pbl'],returnUrl:'https://consumer.test/developer'});
+ const c=consumerConfiguration()!,customer={firstName:'Jean',lastName:'Martin',email:'jean@example.test',phone:'+33123456789',billingAddress:{address1:'12 Rue Exemple',address2:'Apt 4',city:'Paris',postcode:'75001',country:'FR'}};
+ const input={submissionId:'de37d660-8303-41c5-aa88-70e902408ed5',reference:'QUOTE-123',description:'Additional guest',amount:'62.45',currency:'EUR',customer};
+ for(const mode of ['vt','pbl'] as const){const r=paymentRequest(c.source,input,mode,new Date().toISOString()).request;assert.deepEqual(r.customer,customer);assert.equal(r.description,input.description);assert.equal(r.amountMinor,6245);assert.equal(r.currency,'EUR');}
+ const ecom=paymentRequest(c.source,input,'ecom').request;assert.equal(ecom.customer,undefined);assert.equal(ecom.description,input.description);
+ const blank=paymentRequest(c.source,{...input,customer:undefined},'vt',new Date().toISOString()).request;assert.equal(blank.customer,undefined);
+ assert.throws(()=>paymentRequest(c.source,{...input,customer:{billingAddress:{country:'France'}}},'vt',new Date().toISOString()));
+});

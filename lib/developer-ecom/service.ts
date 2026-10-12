@@ -7,7 +7,7 @@ import { requestSchema } from '../pay-lab/contract';
 import { Source, connectionFor, key } from '../session-gateway/config';
 import { call, verifyEvent } from '../../public/developer-client.mjs';
 
-const form = z.object({ submissionId:z.uuid(), reference:z.string().trim().min(1).max(200), amount:z.string().regex(/^\d{1,7}(\.\d{1,2})?$/), currency:z.string().regex(/^[A-Z]{3}$/), customer:requestSchema.shape.customer }).strict();
+const form = z.object({ submissionId:z.uuid(), reference:z.string().trim().min(1).max(200), amount:z.string().regex(/^\d{1,7}(\.\d{1,2})?$/), currency:z.string().regex(/^[A-Z]{3}$/), customer:requestSchema.shape.customer, description:requestSchema.shape.description }).strict();
 import { consumerConfiguration } from './consumer-config';
 export type DemoSource=Pick<Source,'id'|'requestSecretEnv'|'resultSecretEnv'> & Partial<Source>;
 export type DemoMode='ecom'|'vt'|'pbl';
@@ -35,7 +35,7 @@ export function paymentRequest(s:DemoSource,value:unknown,mode:DemoMode='ecom',a
  const amountMinor=Number(whole)*100+Number(fraction.padEnd(2,'0'));
  if(!Number.isSafeInteger(amountMinor)||amountMinor<1||amountMinor>999999999||!c.currencies.includes(v.currency)) throw new LabError('Enter an amount and currency enabled for this test connection.');
  if(mode!=='ecom'&&(!authenticatedAt||!Number.isFinite(Date.parse(authenticatedAt))||Math.abs(Date.now()-Date.parse(authenticatedAt))>300000))throw new LabError('Authenticate the test operator again before creating a staff payment request.',403);
- return {submissionId:v.submissionId,input:v,request:{requestKey:randomUUID(),obligationId:randomUUID(),reference:v.reference,amountMinor,currency:v.currency,...(mode==='pbl'&&v.customer?{customer:v.customer}:{}),mode,presentation:'hosted',...(mode!=='ecom'?{operator:{id:c.operator!.id,authenticatedAt:authenticatedAt!}}:{}),expiresAt:new Date(Date.now()+c.seconds*1000).toISOString(),returnUrl:c.returnUrl}};
+ return {submissionId:v.submissionId,input:v,request:{requestKey:randomUUID(),obligationId:randomUUID(),reference:v.reference,amountMinor,currency:v.currency,...(mode!=='ecom'&&v.customer?{customer:v.customer}:{}),...(v.description?{description:v.description}:{}),mode,presentation:'hosted',...(mode!=='ecom'?{operator:{id:c.operator!.id,authenticatedAt:authenticatedAt!}}:{}),expiresAt:new Date(Date.now()+c.seconds*1000).toISOString(),returnUrl:c.returnUrl}};
 }
 export async function createExample(s:DemoSource,value:unknown,mode:DemoMode='ecom',authenticatedAt?:string) {
  const p=paymentRequest(s,value,mode,authenticatedAt);
