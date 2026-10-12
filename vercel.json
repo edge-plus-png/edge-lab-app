@@ -17,6 +17,7 @@
     "PAY_LAB_DEPLOYMENT_MODE": "canonical",
     "PAY_LAB_ENVIRONMENT": "staging",
     "PAY_LAB_QUEUE_ENABLED": "true",
-    "PAY_LAB_PUBLIC_ECOM": "true"
+    "PAY_LAB_PUBLIC_ECOM": "true",
+    "PAY_LAB_PUBLIC_DEMO": "true"
   }
 }
