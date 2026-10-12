@@ -1,3 +1,4 @@
+import { publicEcomConfiguration } from './lib/developer-ecom/public-access';
 import { consumerConfiguration } from './lib/developer-ecom/consumer-config';
 // proxy.ts
 import { developerSource, developerChallenge } from "./lib/session-gateway/developer";
@@ -55,7 +56,7 @@ export default function proxy(req: NextRequest) {
     return boundary;
   }
   if (canonicalDeployment() && ["/developer", "/developer/guide", "/developer-guide.md", "/developer-client.mjs", "/hosted-ecom-example.mjs", "/hosted-moto-example.mjs", "/hosted-moto-guide.md", "/payment-link-example.mjs", "/payment-link-guide.md", "/developer/payment-links", "/developer/moto"].includes(req.nextUrl.pathname)) {
-    try { const c=consumerConfiguration(); const source=c?developerSource(req.headers,[{source:c.source,staffUser:c.staffUser,staffPasswordEnv:c.staffPasswordEnv}]):developerSource(req.headers); if (!source) return NextResponse.redirect(new URL("/developer/login",req.url)); } catch { return developerChallenge(); }
+    try { if (["/developer", "/developer/guide", "/developer-guide.md", "/developer-client.mjs", "/hosted-ecom-example.mjs"].includes(req.nextUrl.pathname) && publicEcomConfiguration(req.headers)) return NextResponse.next(); const c=consumerConfiguration(); const source=c?developerSource(req.headers,[{source:c.source,staffUser:c.staffUser,staffPasswordEnv:c.staffPasswordEnv}]):developerSource(req.headers); if (!source) return NextResponse.redirect(new URL("/developer/login",req.url)); } catch { return developerChallenge(); }
   }
   if (canonicalDeployment()) return NextResponse.next();
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
