@@ -140,14 +140,14 @@ async function apply(c: Config, id: string, value: unknown) {
     return record(db, c.id, id);
   });
 }
-export async function launch(c: Config, id: string, routeRef: string) {
+export async function launch(c: Config, id: string, routeRef: string, checkedSettings?: Awaited<ReturnType<typeof settings>>) {
   const saved = await getRecord(c.id, id);
   if (!saved.request && !c.providerTestModeConfirmed)
     throw new LabError(
       "A verified provider test-mode configuration is required before creating payment sessions.",
       409,
     );
-  const config = saved.request ? null : await settings(c);
+  const config = saved.request ? null : checkedSettings ?? await settings(c);
   const route = saved.request ? saved.route : config!.routes.find((r) => r.ref === routeRef);
   if (route && route.ref !== routeRef) throw new LabError("Saved route does not match the requested route.",409);
   if (!route) throw new LabError("This payment route is not granted.", 403);
@@ -366,10 +366,10 @@ export async function receive(c: Config, raw: string, headers: Headers) {
 }
 
 // Public partner contract only: no provider credentials or database access to Pay.
-export async function launchCollection(c: Config, id: string) {
+export async function launchCollection(c: Config, id: string, checkedSettings?: Awaited<ReturnType<typeof settings>>) {
   const existing = await getRecord(c.id, id);
   if (!existing.request && (!c.providerTestModeConfirmed || !c.staffCollection)) throw new LabError("Configure the partner staff collection and confirm provider test mode first.", 409);
-  const configuration = existing.request ? null : await settings(c);
+  const configuration = existing.request ? null : checkedSettings ?? await settings(c);
   const r = await transaction(async db => {
     const row = await record(db, c.id, id);
     if (row.request && !(row.request as { routes?: unknown }).routes) throw new LabError("Resume the existing payment journey for this booking.", 409);
